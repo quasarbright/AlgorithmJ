@@ -78,6 +78,10 @@ substituteMonoType name replacement target = case target of
     TTup tys -> TTup (substituteMonoType name replacement <$> tys)
     TCon conName tys -> TCon conName (substituteMonoType name replacement <$> tys)
 
+
+-- combinators for constructing types
+
+
 scheme :: (Foldable t, Functor t) => t Integer -> MonoType -> Type
 scheme names t = foldr TScheme (TMono t) (MkTVName <$> names)
 

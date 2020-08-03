@@ -29,6 +29,10 @@ initialState = MkState nameSource [] UF.empty []
 
 type TypeChecker a = StateT TCState (Either (TypeError, TCState)) a
 
+
+-- utilities
+
+
 -- | get a fresh type name
 freshName :: TypeChecker TVName
 freshName = do
@@ -49,6 +53,36 @@ throw err = do
 -- | throw a mismatch error
 mismatch :: MonoType -> MonoType -> TypeChecker a
 mismatch a b = throw (Mismatch a b)
+
+-- | Temporarily manipulate the context for the given computation, and restore it afterwards.
+-- NOTE: still modifies name source and union-find permanently
+localCtx :: (Context -> Context) -> TypeChecker a -> TypeChecker a
+localCtx f computation = do
+    oldCtx <- getContext <$> get
+    modify $ \s -> s{getContext=f (getContext s)}
+    result <- computation
+    modify $ \s -> s{getContext=oldCtx}
+    return result
+
+-- | Temporarily include a variable annotation in the context for the given computation, and restore the original context
+-- afterwards.
+-- NOTE: still modifies name source and union find permanently
+localVarAnnot :: VName -> Type -> TypeChecker a -> TypeChecker a
+localVarAnnot x t = localCtx (addVarAnnot x t)
+
+-- | Temporarily add a reason for the given computation, and restore the original reasons afterwards.
+-- NOTE: still modifies name source and union find permanently
+localReason :: Reason -> TypeChecker a -> TypeChecker a
+localReason reason computation = do
+    oldReasons <- getReasons <$> get
+    modify $ \s -> s{getReasons=reason:oldReasons}
+    result <- computation
+    modify $ \s -> s{getReasons=oldReasons}
+    return result
+
+
+-- type inference
+
 
 -- | attempt to unify two types
 unify :: MonoType -> MonoType -> TypeChecker ()
@@ -106,12 +140,12 @@ generalize t = do
     let fvs = getContextMonoTypeFreeVars t ctx
     return $ foldr TScheme (TMono t) fvs
 
--- | polymorphize a mono type by quantifying all free variables occurring in it (ignores context).
--- use for final generalization
-blindGeneralize :: MonoType -> TypeChecker Type
-blindGeneralize t = do
-    let fvs = getMonoTypeFreeVars t
-    return $ foldr TScheme (TMono t) fvs
+---- | polymorphize a mono type by quantifying all free variables occurring in it (ignores context).
+---- use for final generalization
+--blindGeneralize :: MonoType -> TypeChecker Type
+--blindGeneralize t = do
+--    let fvs = getMonoTypeFreeVars t
+--    return $ foldr TScheme (TMono t) fvs
 
 -- | simplify a type by repeatedly substituting its free variables for their solutions
 simplify :: MonoType -> TypeChecker MonoType
@@ -160,32 +194,6 @@ infer e = localReason (Inferring e) $
 --removeVarAnnot :: VName -> Type -> TypeChecker ()
 --removeVarAnnot x t = do
 --    modify $ \s -> s{getContext = delete (x, t) (getContext s)}
-
--- | Temporarily manipulate the context for the given computation, and restore it afterwards.
--- NOTE: still modifies name source and union-find permanently
-localCtx :: (Context -> Context) -> TypeChecker a -> TypeChecker a
-localCtx f computation = do
-    oldCtx <- getContext <$> get
-    modify $ \s -> s{getContext=f (getContext s)}
-    result <- computation
-    modify $ \s -> s{getContext=oldCtx}
-    return result
-
--- | Temporarily include a variable annotation in the context for the given computation, and restore the original context
--- afterwards.
--- NOTE: still modifies name source and union find permanently
-localVarAnnot :: VName -> Type -> TypeChecker a -> TypeChecker a
-localVarAnnot x t = localCtx (addVarAnnot x t)
-
--- | Temporarily add a reason for the given computation, and restore the original reasons afterwards.
--- NOTE: still modifies name source and union find permanently
-localReason :: Reason -> TypeChecker a -> TypeChecker a
-localReason reason computation = do
-    oldReasons <- getReasons <$> get
-    modify $ \s -> s{getReasons=reason:oldReasons}
-    result <- computation
-    modify $ \s -> s{getReasons=oldReasons}
-    return result
 
 -- | infer a type for the given expression using the initial state. Discard the final state (unless there's an error)
 runInference :: Expr -> TCState -> Either (TypeError, TCState) Type

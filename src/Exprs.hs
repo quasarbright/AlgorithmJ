@@ -31,6 +31,9 @@ instance Show Expr where
             Let x value body -> showParen (p > p') $ showString "let " . shows x . showString " = " . shows value . showString " in " . shows body
             Tup es -> showParen True $ showString (intercalate ", " (show <$> es))
 
+
+-- combinators for constructing expressions
+
 var :: String -> Expr
 var = Var . MKVName
 

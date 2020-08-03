@@ -13,6 +13,10 @@ instance Show ContextItem where
 -- | variable annotations, most recent one first
 type Context = [ContextItem]
 
+
+-- modification / building
+
+
 -- | add a variable annotation to the context
 addVarAnnot :: VName -> Type -> Context -> Context
 addVarAnnot x t ctx = VarAnnot x t:ctx
@@ -24,6 +28,10 @@ removeVarAnnot x t = delete (VarAnnot x t)
 -- | create a context from a list of variable annotations
 ctxFromList :: Foldable t => t (String, Type) -> Context
 ctxFromList = foldr (\ (name, t) ctx -> VarAnnot (MKVName name) t: ctx) []
+
+
+-- observations
+
 
 -- | get the free type variables of all types in the range of the context
 getContextFreeVars :: Context -> Set.Set TVName
