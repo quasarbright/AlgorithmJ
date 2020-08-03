@@ -21,9 +21,12 @@ description:         Please see the README on GitHub at <https://github.com/Gith
 
 dependencies:
 - base >= 4.7 && < 5
+- containers
+- transformers
 
 library:
   source-dirs: src
+  ghc-options: -w -Wall
 
 executables:
   AlgorithmJ-exe:
@@ -46,3 +49,4 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - AlgorithmJ
+    - HUnit
