@@ -50,6 +50,8 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferError "loop" ("x" \. var "x" \$ var "x") (OccursError (MkTVName 1) (tvar 1 \-> tvar 2))
     , tInfer "unit" unit (TMono tunit)
     , tInfer "2-tuple" (tup [int 1, unit]) (TMono $ ttup [tint, tunit])
+    , tInfer "true" (con "True") (TMono $ tcon "Bool" [])
+    , tInfer "false" (con "False") (TMono $ tcon "Bool" [])
     ]
 
 tests = TestList

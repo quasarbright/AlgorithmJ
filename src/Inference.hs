@@ -1,6 +1,6 @@
 {-
 TODO constructor expressions
-TODO decls
+TODO decls (necessary for adding List to the initial context)
 TODO annotations
 TODO pattern matching
 TODO lets have pattern LHSs
@@ -19,6 +19,7 @@ import Control.Monad.Trans.State.Strict
 import Control.Monad.Trans.Class (lift)
 import Control.Monad
 import Context
+import Common
 
 data Reason = Inferring Expr
             | Unifying MonoType MonoType
@@ -36,8 +37,14 @@ instance Show TCState where
 instance Eq TCState where
     MkState _ ctx uf reasons == MkState _ ctx' uf' reasons' = (ctx, uf, reasons) == (ctx', uf', reasons')
 
+initialContext :: Context
+initialContext =
+    emptyContext
+    |> addConAnnotStr "True" (TMono $ tcon "Bool" [])
+    |> addConAnnotStr "False" (TMono $ tcon "Bool" [])
+
 initialState :: TCState
-initialState = MkState nameSource [] UF.empty []
+initialState = MkState nameSource initialContext UF.empty []
 
 type TypeChecker a = StateT TCState (Either (TypeError, TCState)) a
 
@@ -178,7 +185,12 @@ infer e = localReason (Inferring e) $
         Var name -> do
             ctx <- getContext <$> get
             case lookupVar ctx name of
-                Nothing -> error "unbound var"
+                Nothing -> error ("unbound var: "++show name)
+                Just t -> instantiate t
+        Con name -> do
+            ctx <- getContext <$> get
+            case lookupCon ctx name of
+                Nothing -> error ("unbound value constructor: "++show name)
                 Just t -> instantiate t
         EInt{} -> return TInt
         App f x -> do

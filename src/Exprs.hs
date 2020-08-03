@@ -2,11 +2,18 @@ module Exprs where
 
 import Data.List
 
-newtype VName = MKVName{getVName :: String} deriving(Eq, Ord)
+-- | variable name
+newtype VName = MkVName{getVName :: String} deriving(Eq, Ord)
+
+-- | value constructor name
+newtype CName = MkCName{getCName :: String} deriving(Eq, Ord)
 
 instance Show VName where show = getVName
 
+instance Show CName where show = getCName
+
 data Expr = Var VName
+          | Con CName
           | EInt Int
           | Lam VName Expr
           | App Expr Expr
@@ -23,8 +30,10 @@ instance Show Expr where
                 App{} -> 9
                 Let{} -> 3
                 Tup{} -> 10
+                Con{} -> 10
         in case e of
             Var name -> shows name
+            Con name -> shows name
             EInt n -> shows n
             Lam name body -> showParen (p > p') $ showString "\\" . shows name . showString "." . showsPrec p' body
             App f x -> showParen (p > p') $ showsPrec p' f . showString " " . showsPrec (p' + 1) x
@@ -35,13 +44,16 @@ instance Show Expr where
 -- combinators for constructing expressions
 
 var :: String -> Expr
-var = Var . MKVName
+var = Var . MkVName
+
+con :: String -> Expr
+con = Con . MkCName
 
 int :: Int -> Expr
 int = EInt
 
 elet :: String -> Expr -> Expr -> Expr
-elet name = Let (MKVName name)
+elet name = Let (MkVName name)
 
 tup :: [Expr] -> Expr
 tup = Tup
@@ -55,4 +67,4 @@ infixl 9 \$
 
 infixr 3 \.
 (\.) :: String -> Expr -> Expr
-x \. e = Lam (MKVName x) e
+x \. e = Lam (MkVName x) e
