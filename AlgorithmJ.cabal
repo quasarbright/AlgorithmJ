@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c5eadc064e9c067cb13c15886916d44664b7a52599c9aba54a383fc9ddca5130
+-- hash: 42a2a300ebf8f5689f8316f99713519a6621452a2c544a61d66fefea8ae2856e
 
 name:           AlgorithmJ
 version:        0.1.0.0
@@ -29,6 +29,7 @@ library
   exposed-modules:
       Common
       Exprs
+      Inference
       Lib
       Types
       UnionFind

@@ -25,3 +25,20 @@ instance Show Expr where
             Lam name body -> showParen (p > p') $ showString "\\" . shows name . showString "." . showsPrec p' body
             App f x -> showParen (p > p') $ showsPrec p' f . showString " " . showsPrec (p' + 1) x
             Let x value body -> showParen (p > p') $ showString "let " . shows x . showString " = " . shows value . showString " in " . shows body
+
+var :: String -> Expr
+var = Var . MKVName
+
+int :: Int -> Expr
+int = EInt
+
+elet :: String -> Expr -> Expr -> Expr
+elet name value body = Let (MKVName name) value body
+
+infixl 9 \$
+(\$) :: Expr -> Expr -> Expr
+(\$) = App
+
+infixr 3 \.
+(\.) :: String -> Expr -> Expr
+x \. e = Lam (MKVName x) e
