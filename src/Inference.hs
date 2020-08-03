@@ -1,3 +1,15 @@
+{-
+TODO constructor expressions
+TODO decls
+TODO annotations
+TODO pattern matching
+TODO lets have pattern LHSs
+TODO let f x = ... sugar
+TODO fixed expressions
+TODO let rec
+TODO let rec and
+-}
+
 module Inference where
 
 import Exprs
