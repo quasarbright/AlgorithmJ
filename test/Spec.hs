@@ -48,6 +48,8 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInfer "id id" (elet "id" ("x" \. var "x")  (var "id" \$ var "id")) (scheme [3] $ tvar 3 \-> tvar 3)
     , tInfer "use id polymorphically" (elet "id" ("x" \. var "x") (var "id" \$ var "id" \$ var "id" \$ int 1)) (TMono tint)
     , tInferError "loop" ("x" \. var "x" \$ var "x") (OccursError (MkTVName 1) (tvar 1 \-> tvar 2))
+    , tInfer "unit" unit (TMono tunit)
+    , tInfer "2-tuple" (tup [int 1, unit]) (TMono $ ttup [tint, tunit])
     ]
 
 tests = TestList

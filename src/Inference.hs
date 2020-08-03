@@ -63,11 +63,22 @@ unify :: MonoType -> MonoType -> TypeChecker ()
 unify a b = localReason (Unifying a b) $ do
     a' <- find a
     b' <- find b
+    let err = mismatch a' b'
     case (a', b') of
         (TVar name, t) -> unifyHelp name t a' b'
         (t, TVar name) -> unifyHelp name t a' b'
+        (TInt, TInt) -> return ()
         (TArr arg ret, TArr arg' ret') -> unify arg arg' >> unify ret ret'
-        _ -> mismatch a' b'
+        (TTup tys, TTup tys')
+            | length tys == length tys' -> zipWithM_ unify tys tys'
+            | otherwise -> err
+        (TCon name tys, TCon name' tys')
+            | name == name' && length tys == length tys' -> zipWithM_ unify tys tys'
+            | otherwise -> err
+        (TInt,   _) -> err
+        (TArr{}, _) -> err
+        (TTup{}, _) -> err
+        (TCon{}, _) -> err
 
 -- | unify a type variable and a type
 unifyHelp :: TVName -> MonoType -> MonoType -> MonoType -> TypeChecker ()
@@ -142,20 +153,21 @@ infer e = localReason (Inferring e) $
                 Nothing -> error "unbound var"
                 Just t -> instantiate t
         EInt{} -> return TInt
-        (App f x) -> do
+        App f x -> do
             fType <- infer f
             xType <- infer x
             retType <- freshMonoType
             unify fType (TArr xType retType)
             return retType
-        (Lam x body) -> do
+        Lam x body -> do
             argType <- freshMonoType
             retType <- localVarAnnot x (TMono argType) $ infer body
             return $ TArr argType retType
-        (Let x value body) -> do
+        Let x value body -> do
             valueType <- infer value
             valueType' <- generalize valueType
             localVarAnnot x valueType' $ infer body
+        Tup es -> TTup <$> sequence (infer <$> es)
 
 -- | Add a variable annotation to the context (permanently)
 addVarAnnot :: VName -> Type -> TypeChecker ()
