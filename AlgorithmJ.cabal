@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 42a2a300ebf8f5689f8316f99713519a6621452a2c544a61d66fefea8ae2856e
+-- hash: a58839d3d878a61681a3bdfc5c9c742f767d7e797c4c98107ad25dacc102adfc
 
 name:           AlgorithmJ
 version:        0.1.0.0
@@ -28,6 +28,7 @@ source-repository head
 library
   exposed-modules:
       Common
+      Context
       Exprs
       Inference
       Lib

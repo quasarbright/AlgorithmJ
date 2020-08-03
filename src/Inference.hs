@@ -3,22 +3,14 @@ module Inference where
 import Exprs
 import Types
 import qualified UnionFind as UF
-import Common
 import Control.Monad.Trans.State.Strict
 import Control.Monad.Trans.Class (lift)
-import qualified Data.Set as Set
-import Data.List hiding(union, find)
 import Control.Monad
-
--- | variable annotations, most recent one first
-type Context = [(VName, Type)]
+import Context
 
 data Reason = Inferring Expr
             | Unifying MonoType MonoType
             deriving(Eq, Ord, Show)
-
-ctxFromList :: Foldable t => t (String, Type) -> Context
-ctxFromList = foldr (\ (name, t) ctx -> (MKVName name, t) : ctx) []
 
 data TypeError = Mismatch MonoType MonoType
                | OccursError TVName MonoType
@@ -100,16 +92,6 @@ find t = do
     uf <- getUF <$> get
     return (UF.find uf t)
 
-getContextFreeVars :: Context -> Set.Set TVName
-getContextFreeVars ctx =
-    ctx
-    |> fmap snd
-    |> fmap getTypeFreeVars
-    |> Set.unions
-
-getContextMonoTypeFreeVars :: MonoType -> Context -> Set.Set TVName
-getContextMonoTypeFreeVars t ctx = getMonoTypeFreeVars t `Set.difference` getContextFreeVars ctx
-
 -- | monomorphize a scheme by replacing the quantified variable with a fresh mono type
 instantiate :: Type -> TypeChecker MonoType
 instantiate (TScheme name body) = do
@@ -149,7 +131,7 @@ infer e = localReason (Inferring e) $
     case e of
         Var name -> do
             ctx <- getContext <$> get
-            case lookup name ctx of
+            case lookupVar ctx name of
                 Nothing -> error "unbound var"
                 Just t -> instantiate t
         EInt{} -> return TInt
@@ -169,15 +151,15 @@ infer e = localReason (Inferring e) $
             localVarAnnot x valueType' $ infer body
         Tup es -> TTup <$> sequence (infer <$> es)
 
--- | Add a variable annotation to the context (permanently)
-addVarAnnot :: VName -> Type -> TypeChecker ()
-addVarAnnot x t = do
-    modify $ \s -> s{getContext = (x, t):getContext s}
-
--- | remove the (chronologically) last occurrence of a variable annotation from the context (permanently)
-removeVarAnnot :: VName -> Type -> TypeChecker ()
-removeVarAnnot x t = do
-    modify $ \s -> s{getContext = delete (x, t) (getContext s)}
+---- | Add a variable annotation to the context (permanently)
+--addVarAnnot :: VName -> Type -> TypeChecker ()
+--addVarAnnot x t = do
+--    modify $ \s -> s{getContext = (x, t):getContext s}
+--
+---- | remove the (chronologically) last occurrence of a variable annotation from the context (permanently)
+--removeVarAnnot :: VName -> Type -> TypeChecker ()
+--removeVarAnnot x t = do
+--    modify $ \s -> s{getContext = delete (x, t) (getContext s)}
 
 -- | Temporarily manipulate the context for the given computation, and restore it afterwards.
 -- NOTE: still modifies name source and union-find permanently
@@ -193,7 +175,7 @@ localCtx f computation = do
 -- afterwards.
 -- NOTE: still modifies name source and union find permanently
 localVarAnnot :: VName -> Type -> TypeChecker a -> TypeChecker a
-localVarAnnot x t = localCtx ((x,t):)
+localVarAnnot x t = localCtx (addVarAnnot x t)
 
 -- | Temporarily add a reason for the given computation, and restore the original reasons afterwards.
 -- NOTE: still modifies name source and union find permanently
