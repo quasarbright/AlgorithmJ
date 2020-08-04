@@ -86,6 +86,7 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferExprWithPrelude "id :: int -> int" (var "id" \:: tint \-> tint) (TMono $ tint \-> tint)
     , tInfer "1 :: int" (int 1 \:: tint) (TMono tint)
     , tInferErrorWithPrelude "1 :: Bool" (int 1 \:: tbool) (Mismatch tbool tint)
+    , tInferErrorWithPrelude "id :: int -> Bool" (var "id" \:: tint \-> tbool) (Mismatch tbool tint)
     ]
 
 tests = TestList
