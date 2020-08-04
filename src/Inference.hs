@@ -1,6 +1,7 @@
 {-
 TODO organize your modules into directories
-TODO pattern matching
+TODO write down updated rules for pattern checking (now using find) and generalization (now using find) 
+TODO investigate eagerness 
 TODO lets have pattern LHSs
 TODO let f x = ... sugar
 TODO fixed expressions
