@@ -3,15 +3,17 @@ module Exprs where
 import Data.List
 import Names
 import Types
+import Patterns
 
 data Expr = Var VName
           | Con CName
-          | EInt Int
+          | EInt Int -- TODO replace with literal type
           | Lam VName Expr
           | App Expr Expr
           | Let VName Expr Expr
           | Tup [Expr]
           | Annot Expr MonoType
+          | Case Expr [(Pattern, Expr)]
           deriving(Eq, Ord)
 
 instance Show Expr where
@@ -25,6 +27,7 @@ instance Show Expr where
                 Tup{} -> 10
                 Con{} -> 10
                 Annot{} -> 1
+                Case{} -> 3
         in case e of
             Var name -> shows name
             Con name -> shows name
@@ -34,6 +37,8 @@ instance Show Expr where
             Let x value body -> showParen (p > p') $ showString "let " . shows x . showString " = " . shows value . showString " in " . shows body
             Tup es -> showParen True $ showString (intercalate ", " (show <$> es))
             Annot e' t -> showParen (p > p') $ showsPrec p' e' . showString " :: " . shows t
+            Case e' ms -> showParen (p > p') $ showString "case " . shows e' . showString " of | " . showString (intercalate " | " msStrs)
+                where msStrs = [concat[show pat," -> ",show rhs] | (pat, rhs) <- ms] -- TODO prevent dangling case issue
 
 
 -- combinators for constructing expressions
@@ -55,6 +60,9 @@ tup = Tup
 
 unit :: Expr
 unit = tup []
+
+ecase :: Expr -> [(Pattern, Expr)] -> Expr
+ecase = Case
 
 infixl 2 \::
 (\::) :: Expr -> MonoType -> Expr

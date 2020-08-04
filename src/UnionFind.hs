@@ -1,4 +1,4 @@
-module UnionFind(UnionFind(), empty, union, find) where
+module UnionFind(UnionFind(), empty, union, find, toRep) where
 
 import qualified Data.Map as Map
 import qualified Data.List as List

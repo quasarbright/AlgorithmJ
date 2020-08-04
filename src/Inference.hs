@@ -1,5 +1,5 @@
 {-
-TODO annotations
+TODO organize your modules into directories
 TODO pattern matching
 TODO lets have pattern LHSs
 TODO let f x = ... sugar
@@ -20,6 +20,9 @@ import Context
 import Names
 import Decls
 import Program
+import Patterns
+import qualified Data.Map as Map
+import qualified Data.Set as Set
 
 data Reason = Inferring Expr
             | Unifying MonoType MonoType
@@ -60,6 +63,10 @@ freshName = do
 freshMonoType :: TypeChecker MonoType
 freshMonoType = TVar <$> freshName
 
+-- | get n fresh type variable types
+freshMonoTypes :: Int -> TypeChecker [MonoType]
+freshMonoTypes n = replicateM n freshMonoType
+
 -- | throw a type error
 throw :: TypeError -> TypeChecker a
 throw err = do
@@ -86,6 +93,11 @@ localCtx f computation = do
 localVarAnnot :: VName -> Type -> TypeChecker a -> TypeChecker a
 localVarAnnot x t = localCtx (addVarAnnot x t)
 
+-- | Temporarily add many variable annotations to the context for the given computation, and restore thr original context
+-- afterwards.
+localVarAnnots :: Foldable t => t (VName, Type) -> TypeChecker a -> TypeChecker a
+localVarAnnots annots = localCtx (\ ctx -> (foldr (uncurry addVarAnnot) ctx annots))
+
 -- | Temporarily add a reason for the given computation, and restore the original reasons afterwards.
 -- NOTE: still modifies name source and union find permanently
 localReason :: Reason -> TypeChecker a -> TypeChecker a
@@ -107,6 +119,7 @@ unify a b = localReason (Unifying a b) $ do
     b' <- find b
     let err = mismatch a' b'
     case (a', b') of
+        (TVar{}, TVar{}) -> union a' b'
         (TVar name, t) -> unifyHelp name t a' b'
         (t, TVar name) -> unifyHelp name t a' b'
         (TInt, TInt) -> return ()
@@ -153,7 +166,18 @@ instantiate (TMono t) = return t
 generalize :: MonoType -> TypeChecker Type
 generalize t = do
     ctx <- getContext <$> get
-    let fvs = getContextMonoTypeFreeVars t ctx
+    uf <- getUF <$> get
+    let ctxFvs = getContextFreeVars ctx
+    let typesReachableFromCtxFvs = concatMap (UF.toRep uf . TVar) (Set.toList ctxFvs)
+    let ctxFvs' = Set.unions (getMonoTypeFreeVars <$> typesReachableFromCtxFvs)
+    let tFvs = getMonoTypeFreeVars t
+    let fvs = Set.difference tFvs ctxFvs'
+    -- TODO heavily test this to try to break it. It might under-generalize
+    --  Comes into play in polymorphic pattern matching.
+    -- The reason I changed it to this is because with pattern matching, types are decomposed such that in
+    -- \pair. case pair of (a,_) -> a   we have pair::t1, a::t2, and in the UF, t1=(t2,t3)
+    -- t2 depends on t1, so it's not unbound and should therefore not be quantified.
+--    let fvs = getContextMonoTypeFreeVars t ctx -- old way if this ever goes wrong
     return $ foldr TScheme (TMono t) fvs
 
 -- | polymorphize a mono type by quantifying all free variables occurring in it (ignores context).
@@ -207,8 +231,17 @@ infer e = localReason (Inferring e) $
             valueType <- infer value
             valueType' <- generalize valueType
             localVarAnnot x valueType' $ infer body
-        Tup es -> TTup <$> sequence (infer <$> es)
+        Tup es -> TTup <$> mapM infer es
         Annot e' t -> check e' t >> return t
+        Case e' ms -> do
+            t <- infer e'
+            rhsTypes <- mapM (\ (pat, body) -> processBindingWithBody pat t body) ms
+            case rhsTypes of
+                [] -> error "case with no matches" -- TODO wf
+                _ -> zipWithM_ unify rhsTypes (tail rhsTypes)
+            return (head rhsTypes)
+
+
 
 -- | check an expression against the given mono type
 check :: Expr -> MonoType -> TypeChecker ()
@@ -216,6 +249,62 @@ check e t = do
     t' <- infer e
     unify t t'
 
+-- | determines the mono types of variables when the given pattern is bound to an expression of the given type.
+-- For example, (x,y) = (1,id) will output {x:Int,y:(a -> a)} (not forall a . a -> a, just a -> a).
+-- NOTE: You must generalize the output variables after calling!
+processBinding :: Pattern -> MonoType -> TypeChecker (Map.Map VName MonoType)
+processBinding pattern t = do
+    case pattern of
+            PVar name -> return $ Map.singleton name t
+            PInt{} -> unify tint t >> return Map.empty
+            PTup pats -> do
+                -- assume no name repeats TODO wf
+                tvars <- freshMonoTypes (length pats)
+                let t' = ttup tvars
+                unify t' t
+                tvars' <- mapM find tvars -- necessary to prevent everything from being quantified in the end
+                Map.unions <$> zipWithM processBinding pats tvars'
+            PCon cName pats -> do
+                ctx <- getContext <$> get
+                (tName, params, types) <- case lookupConDef ctx cName of
+                    Nothing -> error ("unbound value constructor: "++show cName)
+                    Just (tName, params, ConDecl _ types) -> return (tName, params, types)
+                tvars <- freshMonoTypes (length params)
+                let t' = TCon tName tvars
+                unify t' t
+                tvars' <- mapM find tvars -- necessary to prevent everything from being quantified in the end
+                -- replace type parameter placeholders with actual type parameters
+                let replacements = zip params tvars'
+                let types' = substituteManyMonoType replacements <$> types
+                -- recursively zip through the child patterns and the product type's subtypes
+                -- assume correct arity TODO wf
+                Map.unions <$> zipWithM processBinding pats types'
+            POr left right -> do
+                leftResult <- Map.toAscList <$>  processBinding left t
+                rightResult <- Map.toAscList <$> processBinding right t
+                -- assume same domains TODO wf
+                zipWithM_ unify (snd <$> leftResult) (snd <$> rightResult)
+                finalRange <- mapM (find . snd) leftResult
+                let finalResult = Map.fromAscList (zip (fst <$> leftResult) (finalRange))
+                return finalResult
+            PWild -> return (Map.empty)
+            PAnnot pat t' -> do
+                unify t' t
+                processBinding pat t'
+
+-- | abstraction for when the variables of a binding are only used in a single expression.
+-- Like @let p = e in body@ or @case e of ... | p -> body | ...@.
+-- NOTE: do NOT use for lambdas because this generalizes all variables' types before checking the body, and lambda arguments
+--   need to be mono types
+processBindingWithBody :: Pattern -> MonoType -> Expr -> TypeChecker MonoType
+processBindingWithBody pat t body = do
+    newVarAnnots <- Map.toList <$> processBinding pat t
+--    ctx <- getContext <$> get
+    generalizedTypes <- mapM (generalize . snd) newVarAnnots --(trace ("newVarAnnots: "++show newVarAnnots++"\ncontext: "++show ctx) newVarAnnots)
+    let generalizedVarAnnots = zip (fst <$> newVarAnnots) generalizedTypes
+    localVarAnnots generalizedVarAnnots (infer body)
+
+-- | Record the declaration in the program, adding its definitions to the context
 processDecl :: Decl -> TypeChecker ()
 processDecl d = case d of
     -- examples:
@@ -225,8 +314,9 @@ processDecl d = case d of
     --
     -- Precisely, it quantifies the type parameters and makes each constructor return the data type with all parameters.
     -- Does so for each constructor
-    DataDecl typeName params cases -> sequence_ (processCase <$> cases)
+    DataDecl typeName params cases -> addData >> sequence_ (processCase <$> cases)
             where
+                addData = modifyContext (addDataInfo typeName params cases) -- didn't want to clutter the line
                 -- ctx += C :: \/a.\/b. A1 -> ... -> An -> D a b
                 processCase (ConDecl conName args) = modifyContext $ addConAnnot conName (foldr TScheme (TMono arrType) params)
                     where
@@ -234,7 +324,7 @@ processDecl d = case d of
                         arrType = foldr TArr (TCon typeName (TVar <$> params)) args
     VarDecl name value -> do
         -- TODO abstract with let when things get more complicated. maybe inferBinding :: Binding -> Map VName Type or something
-        -- careful, should let (id1, id2) = (\x.x, \x.x) result in ids?
+        -- careful, should let (id1, id2) = (\x.x, \x.x) result in ids? YES
         valueType <- infer value
         valueType' <- generalize valueType
         modifyContext $ addVarAnnot name valueType'

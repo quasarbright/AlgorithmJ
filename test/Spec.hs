@@ -7,6 +7,7 @@ import Inference hiding(union, find)
 import qualified Data.Map as Map
 import Names
 import Program
+import Patterns
 
 teq :: (Eq a, Show a) => String -> a -> a -> Test
 teq name a b = TestCase (assertEqual name a b)
@@ -87,6 +88,44 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInfer "1 :: int" (int 1 \:: tint) (TMono tint)
     , tInferErrorWithPrelude "1 :: Bool" (int 1 \:: tbool) (Mismatch tbool tint)
     , tInferErrorWithPrelude "id :: int -> Bool" (var "id" \:: tint \-> tbool) (Mismatch tbool tint)
+    , tInfer "case 1 of 1 -> ()" (ecase (int 1) [(pint 1, unit)]) (TMono tunit)
+    , tInfer "match on tuple" (ecase (tup [int 1, unit]) [(ptup [pvar "n", PWild], var "n")]) (TMono tint)
+    , tInfer "fst" ("pair" \. ecase (var "pair") [(ptup [pvar "a", PWild], var "a")]) (scheme [1,2] (ttup [tvar 1, tvar 2] \-> tvar 1))
+    , tInfer "snd" ("pair" \. ecase (var "pair") [(ptup [PWild, pvar "a"], var "a")]) (scheme [1,2] (ttup [tvar 1, tvar 2] \-> tvar 2))
+    , tInferExprWithPrelude "if with a match" ("cnd"\."thn"\."els"\. ecase (var "cnd") [(pcon "True" [], var "thn"), (pcon "False" [], var "els")]) (scheme [1] $ tbool \-> tvar 1 \-> tvar 1 \-> tvar 1)
+    , tInfer "or pattern" ("pair"\. ecase (var "pair") [(ptup [pint 0, pvar "a"] \| ptup [pvar "a", pint 0], var "a")]) (TMono $ ttup [tint, tint] \-> tint)
+    , tInferExprWithPrelude "list head" ("xs"\. ecase (var "xs") [(pcon "Cons" [pvar "x", PWild], var "x")]) (scheme [1] $ tlist (tvar 1) \-> tvar 1)
+    , tInferExprWithPrelude "list tail" ("xs"\. ecase (var "xs") [(pcon "Cons" [PWild, pvar "xs'"], var "xs'")]) (scheme [1] $ tlist (tvar 1) \-> tlist (tvar 1))
+    , tInferExprWithPrelude "list tail shadow" ("xs"\. ecase (var "xs") [(pcon "Cons" [PWild, pvar "xs"], var "xs")]) (scheme [1] $ tlist (tvar 1) \-> tlist (tvar 1))
+    , tInferExprWithPrelude "[] -> [] | xs -> [0]"
+        ("xs"\. ecase (var "xs") [(pcon "Cons" [PWild, pvar "xs'"], con "Cons" \$ int 0 \$ elist[]), (pcon "Empty" [], elist[])])
+        (scheme [1] $ tlist (tvar 1) \-> tlist tint)
+    , tInferExprWithPrelude "put 0 at head"
+            ("xs"\. ecase (var "xs")
+                [ (pcon "Cons" [PWild, pvar "xs'"], con "Cons" \$ int 0 \$ var "xs'")
+                , (pcon "Empty" [],                 elist[])
+                ])
+            (TMono $ tlist tint \-> tlist tint)
+    , tInferExprWithPrelude "put 0 at head wildcard"
+            ("xs"\. ecase (var "xs")
+                [ (pcon "Cons" [PWild, pvar "xs'"], con "Cons" \$ int 0 \$ var "xs'")
+                , (pwild,                           var "xs")
+                ])
+            (TMono $ tlist tint \-> tlist tint)
+    , tInferExprWithPrelude "map first element"
+            ("f"\."xs"\. ecase (var "xs")
+                [ (pcon "Cons" [pvar "x", pvar "xs'"], con "Cons" \$ (var "f" \$ var "x") \$ var "xs'")
+                , (pcon "Empty" [],                    var "xs")
+                ])
+            (scheme [1] $ (tvar 1 \-> tvar 1) \-> tlist (tvar 1) \-> tlist (tvar 1))
+    , tInferExprWithPrelude "map first element wildcard"
+            ("f"\."xs"\. ecase (var "xs")
+                [ (pcon "Cons" [pvar "x", pvar "xs'"], con "Cons" \$ (var "f" \$ var "x") \$ var "xs'")
+                , (PWild,                              var "xs")
+                ])
+            (scheme [1] $ (tvar 1 \-> tvar 1) \-> tlist (tvar 1) \-> tlist (tvar 1))
+--    , tInferExprWithPrelude "maybe bind"
+    -- TODO investigate weird inferred signature of compose.
     ]
 
 tests = TestList
