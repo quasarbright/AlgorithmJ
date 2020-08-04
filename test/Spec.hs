@@ -83,6 +83,9 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferError "monomorphic used as polymorphic reversed" ("f" \. tup [var "f" \$ unit, var "f" \$ int 1]) (Mismatch tunit tint)
     , tInferExprWithPrelude "const 2" (var "const" \$ int 2) (scheme [1] $ tvar 1 \-> tint)
     , tInferExprWithPrelude "const id" (var "const" \$ var "id") (scheme [1,2] $ tvar 1 \-> tvar 2 \-> tvar 2)
+    , tInferExprWithPrelude "id :: int -> int" (var "id" \:: tint \-> tint) (TMono $ tint \-> tint)
+    , tInfer "1 :: int" (int 1 \:: tint) (TMono tint)
+    , tInferErrorWithPrelude "1 :: Bool" (int 1 \:: tbool) (Mismatch tbool tint)
     ]
 
 tests = TestList

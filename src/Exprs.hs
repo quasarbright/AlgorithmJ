@@ -2,6 +2,7 @@ module Exprs where
 
 import Data.List
 import Names
+import Types
 
 data Expr = Var VName
           | Con CName
@@ -10,6 +11,7 @@ data Expr = Var VName
           | App Expr Expr
           | Let VName Expr Expr
           | Tup [Expr]
+          | Annot Expr MonoType
           deriving(Eq, Ord)
 
 instance Show Expr where
@@ -22,6 +24,7 @@ instance Show Expr where
                 Let{} -> 3
                 Tup{} -> 10
                 Con{} -> 10
+                Annot{} -> 1
         in case e of
             Var name -> shows name
             Con name -> shows name
@@ -30,6 +33,7 @@ instance Show Expr where
             App f x -> showParen (p > p') $ showsPrec p' f . showString " " . showsPrec (p' + 1) x
             Let x value body -> showParen (p > p') $ showString "let " . shows x . showString " = " . shows value . showString " in " . shows body
             Tup es -> showParen True $ showString (intercalate ", " (show <$> es))
+            Annot e' t -> showParen (p > p') $ showsPrec p' e' . showString " :: " . shows t
 
 
 -- combinators for constructing expressions
@@ -51,6 +55,10 @@ tup = Tup
 
 unit :: Expr
 unit = tup []
+
+infixl 2 \::
+(\::) :: Expr -> MonoType -> Expr
+(\::) = Annot
 
 infixl 9 \$
 (\$) :: Expr -> Expr -> Expr

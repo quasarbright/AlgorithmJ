@@ -1,5 +1,4 @@
 {-
-TODO decls (necessary for adding List to the initial context)
 TODO annotations
 TODO pattern matching
 TODO lets have pattern LHSs
@@ -209,6 +208,7 @@ infer e = localReason (Inferring e) $
             valueType' <- generalize valueType
             localVarAnnot x valueType' $ infer body
         Tup es -> TTup <$> sequence (infer <$> es)
+        Annot e' t -> check e' t >> return t
 
 -- | check an expression against the given mono type
 check :: Expr -> MonoType -> TypeChecker ()
