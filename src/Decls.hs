@@ -1,7 +1,7 @@
 module Decls where
 
 import Names
---import Exprs
+import Exprs
 import Types
 import Data.List
 
@@ -12,11 +12,15 @@ data Decl =
         TCName -- type constructor name
         [TVName] -- type parameter names. length = type constructor arity
         [ConDecl] -- union cases
+    | VarDecl
+        VName -- variable name
+        Expr -- value
     deriving(Eq, Ord)
 
 instance Show Decl where
     show d = case d of
         DataDecl name params conDecls -> concat["data ",show name," ",unwords (show <$> params)," = ",intercalate " | " (show <$> conDecls)]
+        VarDecl name value -> concat[show name," = ",show value]
 
 -- | value constructor declaration. describes a product type
 data ConDecl = ConDecl CName [MonoType] deriving(Eq, Ord)
@@ -31,3 +35,6 @@ dataDecl name params = DataDecl (MkTCName name) (MkTVName <$> params)
 
 conDecl :: String -> [MonoType] -> ConDecl
 conDecl name = ConDecl (MkCName name)
+
+varDecl :: String -> Expr -> Decl
+varDecl name = VarDecl (MkVName name)

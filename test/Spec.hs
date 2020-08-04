@@ -36,7 +36,7 @@ tInferExprWithPrelude name e t = teq name (Right t) actual
             Right (t, _) -> Right t
 
 tInferError :: String -> Expr -> TypeError -> Test
-tInferError name e err = TestList [teq name (Left err) actual, tInferErrorWithPrelude name e err]
+tInferError name e err = teq name (Left err) actual
     where
         result = runInference e initialState
         actual = case result of
@@ -58,12 +58,15 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInfer "church true" ("x" \. "y" \. var "x") (scheme [1, 2] (tvar 1 \-> tvar 2 \-> tvar 1))
     , tInfer "church false" ("x" \. "y" \. var "y") (scheme [1, 2] (tvar 1 \-> tvar 2 \-> tvar 2))
     -- even more general than I thought!
-    , tInfer "church if" ("cond" \. "thn" \. "els" \. var "cond" \$ var "thn" \$ var "els") (scheme [2,3,5] ((tvar 2 \-> tvar 3 \-> tvar 5) \-> tvar 2 \-> tvar 3 \-> tvar 5))
+    , tInfer "church if" ("cond" \. "thn" \. "els" \. var "cond" \$ var "thn" \$ var "els") (scheme [1,2,3] ((tvar 1 \-> tvar 2 \-> tvar 3) \-> tvar 1 \-> tvar 2 \-> tvar 3))
     , tInfer "apply id" (("x" \. var "x") \$ int 1) (TMono tint)
     , tInfer "use id" (elet "id" ("x" \. var "x")  (var "id" \$ int 1)) (TMono tint)
-    , tInfer "id id" (elet "id" ("x" \. var "x")  (var "id" \$ var "id")) (scheme [3] $ tvar 3 \-> tvar 3)
+    , tInferExprWithPrelude "use prelude id" (var "id" \$ int 1) (TMono tint)
+    , tInfer "id id" (elet "id" ("x" \. var "x")  (var "id" \$ var "id")) (scheme [1] $ tvar 1 \-> tvar 1)
+    , tInferExprWithPrelude "prelude id id" (var "id" \$ var "id") (scheme [1] $ tvar 1 \-> tvar 1)
     , tInfer "use id polymorphically" (elet "id" ("x" \. var "x") (var "id" \$ var "id" \$ var "id" \$ int 1)) (TMono tint)
     , tInferError "loop" ("x" \. var "x" \$ var "x") (OccursError (MkTVName 1) (tvar 1 \-> tvar 2))
+    , tInferErrorWithPrelude "loop" ("x" \. var "x" \$ var "x") (OccursError (MkTVName 9) (tvar 9 \-> tvar 10))
     , tInfer "unit" unit (TMono tunit)
     , tInfer "2-tuple" (tup [int 1, unit]) (TMono $ ttup [tint, tunit])
     , tInferExprWithPrelude "true" etrue (TMono tbool)
@@ -74,8 +77,12 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferExprWithPrelude "cons True empty" (elist [etrue]) (TMono (tlist tbool))
     , tInferExprWithPrelude "nothing" enothing (scheme [1] (tmaybe (tvar 1)))
     , tInferExprWithPrelude "just True" (ejust etrue) (TMono $ tmaybe tbool)
-    , tInferExprWithPrelude "just nothing" (ejust enothing) (scheme [2] (tmaybe (tmaybe (tvar 2))))
-    , tInferExprWithPrelude "just (just nothing)" (ejust (ejust enothing)) (scheme [3] (tmaybe (tmaybe (tmaybe (tvar 3)))))
+    , tInferExprWithPrelude "just nothing" (ejust enothing) (scheme [1] (tmaybe (tmaybe (tvar 1))))
+    , tInferExprWithPrelude "just (just nothing)" (ejust (ejust enothing)) (scheme [1] (tmaybe (tmaybe (tmaybe (tvar 1)))))
+    , tInferError "monomorphic used as polymorphic" ("f" \. tup [var "f" \$ int 1, var "f" \$ unit]) (Mismatch tint tunit)
+    , tInferError "monomorphic used as polymorphic reversed" ("f" \. tup [var "f" \$ unit, var "f" \$ int 1]) (Mismatch tunit tint)
+    , tInferExprWithPrelude "const 2" (var "const" \$ int 2) (scheme [1] $ tvar 1 \-> tint)
+    , tInferExprWithPrelude "const id" (var "const" \$ var "id") (scheme [1,2] $ tvar 1 \-> tvar 2 \-> tvar 2)
     ]
 
 tests = TestList

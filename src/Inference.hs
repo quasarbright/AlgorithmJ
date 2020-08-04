@@ -157,10 +157,10 @@ generalize t = do
     let fvs = getContextMonoTypeFreeVars t ctx
     return $ foldr TScheme (TMono t) fvs
 
----- | polymorphize a mono type by quantifying all free variables occurring in it (ignores context).
---blindGeneralize :: MonoType -> Type
---blindGeneralize t = foldr TScheme (TMono t) fvs
---    where fvs = getMonoTypeFreeVars t
+-- | polymorphize a mono type by quantifying all free variables occurring in it (ignores context).
+blindGeneralize :: MonoType -> Type
+blindGeneralize t = foldr TScheme (TMono t) fvs
+    where fvs = getMonoTypeFreeVars t
 
 -- | simplify a type by repeatedly substituting its free variables for their solutions
 simplify :: MonoType -> TypeChecker MonoType
@@ -173,6 +173,11 @@ _stepSimplify :: MonoType -> TypeChecker MonoType
 _stepSimplify t = do
     let fvs = getMonoTypeFreeVars t
     foldM (\ t' name -> liftM3 substituteMonoType (return name) (find (TVar name)) (return t')) t fvs
+
+-- | simplify and generalize the mono type
+finalizeMonoType :: MonoType -> TypeChecker Type
+finalizeMonoType = simplify >=> return . reduceMonoVars >=> return . blindGeneralize
+
 
 -- | Infer a type for the given expression
 infer :: Expr -> TypeChecker MonoType
@@ -227,21 +232,27 @@ processDecl d = case d of
                     where
                         -- A1 -> ... -> An -> D a b
                         arrType = foldr TArr (TCon typeName (TVar <$> params)) args
+    VarDecl name value -> do
+        -- TODO abstract with let when things get more complicated. maybe inferBinding :: Binding -> Map VName Type or something
+        -- careful, should let (id1, id2) = (\x.x, \x.x) result in ids?
+        valueType <- infer value
+        valueType' <- generalize valueType
+        modifyContext $ addVarAnnot name valueType'
 
 -- | run type inference for a program, returning the generalized body type
 inferProgram :: Program -> TypeChecker Type
 inferProgram (Program decls body) = do
     sequence_ (processDecl <$> decls)
     bodyType <- infer body
-    simplify >=> generalize $ bodyType
+    finalizeMonoType bodyType
 
 -- | infer a type for the given expression using the initial state. Discard the final state (unless there's an error)
 runInference :: Expr -> TCState -> Either (TypeError, TCState) Type
-runInference e = evalStateT (infer >=> simplify >=> generalize $ e)
+runInference = evalStateT . (infer >=> finalizeMonoType)
 
 -- | infer a type for the given expression using the initial state. Include the final state.
 runInferenceAndState :: Expr -> TCState -> Either (TypeError, TCState) (Type, TCState)
-runInferenceAndState = runStateT . (infer >=> simplify >=> generalize)
+runInferenceAndState = runStateT . (infer >=> finalizeMonoType)
 
 runProgramInference :: Program -> TCState -> Either (TypeError, TCState) (Type, TCState)
 runProgramInference = runStateT . inferProgram

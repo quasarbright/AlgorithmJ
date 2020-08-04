@@ -3,6 +3,7 @@ module Types where
 import qualified Data.Set as Set
 import Data.List(intercalate)
 import Names
+import Data.Maybe as Maybe
 
 -- | infinite source of variable names
 nameSource :: [TVName]
@@ -59,16 +60,25 @@ substituteType name replacement target = case target of
         | name == name' -> target
         | otherwise -> TScheme name' (substituteType name replacement body)
 
+-- | substitute a name for a type in the target type
 substituteMonoType :: TVName -> MonoType -> MonoType -> MonoType
-substituteMonoType name replacement target = case target of
-    TVar name'
-        | name == name' -> replacement
-        | otherwise -> target
-    TInt -> target
-    TArr arg ret -> TArr (substituteMonoType name replacement arg) (substituteMonoType name replacement ret)
-    TTup tys -> TTup (substituteMonoType name replacement <$> tys)
-    TCon conName tys -> TCon conName (substituteMonoType name replacement <$> tys)
+substituteMonoType name replacement = substituteManyMonoType [(name, replacement)]
 
+-- | simultaneously run several substitutions
+substituteManyMonoType :: [(TVName, MonoType)] -> MonoType -> MonoType
+substituteManyMonoType substitutions target = case target of
+    TVar name -> Maybe.fromMaybe target (lookup name substitutions)
+    TInt -> target
+    TArr arg ret -> TArr (substituteManyMonoType substitutions arg) (substituteManyMonoType substitutions ret)
+    TTup tys -> TTup (substituteManyMonoType substitutions <$> tys)
+    TCon conName tys -> TCon conName (substituteManyMonoType substitutions <$> tys)
+
+-- | Reduces something like t3 -> t5 to t1 -> t2
+reduceMonoVars :: MonoType -> MonoType
+reduceMonoVars t = 
+    let vars = Set.toList $ getMonoTypeFreeVars t
+        vars' = tvar <$> [1..(toInteger $ length vars)]
+    in substituteManyMonoType (zip vars vars') t
 
 -- combinators for constructing types
 
