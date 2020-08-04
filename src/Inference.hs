@@ -1,5 +1,4 @@
 {-
-TODO constructor expressions
 TODO decls (necessary for adding List to the initial context)
 TODO annotations
 TODO pattern matching
@@ -19,7 +18,9 @@ import Control.Monad.Trans.State.Strict
 import Control.Monad.Trans.Class (lift)
 import Control.Monad
 import Context
-import Common
+import Names
+import Decls
+import Program
 
 data Reason = Inferring Expr
             | Unifying MonoType MonoType
@@ -37,20 +38,17 @@ instance Show TCState where
 instance Eq TCState where
     MkState _ ctx uf reasons == MkState _ ctx' uf' reasons' = (ctx, uf, reasons) == (ctx', uf', reasons')
 
-initialContext :: Context
-initialContext =
-    emptyContext
-    |> addConAnnotStr "True" (TMono $ tcon "Bool" [])
-    |> addConAnnotStr "False" (TMono $ tcon "Bool" [])
-
 initialState :: TCState
-initialState = MkState nameSource initialContext UF.empty []
+initialState = MkState nameSource [] UF.empty []
 
 type TypeChecker a = StateT TCState (Either (TypeError, TCState)) a
 
 
 -- utilities
 
+-- | modify the context (permanently)
+modifyContext :: (Context -> Context) -> TypeChecker ()
+modifyContext f = modify $ \s -> s{getContext = f . getContext $ s}
 
 -- | get a fresh type name
 freshName :: TypeChecker TVName
@@ -160,11 +158,9 @@ generalize t = do
     return $ foldr TScheme (TMono t) fvs
 
 ---- | polymorphize a mono type by quantifying all free variables occurring in it (ignores context).
----- use for final generalization
---blindGeneralize :: MonoType -> TypeChecker Type
---blindGeneralize t = do
---    let fvs = getMonoTypeFreeVars t
---    return $ foldr TScheme (TMono t) fvs
+--blindGeneralize :: MonoType -> Type
+--blindGeneralize t = foldr TScheme (TMono t) fvs
+--    where fvs = getMonoTypeFreeVars t
 
 -- | simplify a type by repeatedly substituting its free variables for their solutions
 simplify :: MonoType -> TypeChecker MonoType
@@ -209,15 +205,35 @@ infer e = localReason (Inferring e) $
             localVarAnnot x valueType' $ infer body
         Tup es -> TTup <$> sequence (infer <$> es)
 
----- | Add a variable annotation to the context (permanently)
---addVarAnnot :: VName -> Type -> TypeChecker ()
---addVarAnnot x t = do
---    modify $ \s -> s{getContext = (x, t):getContext s}
---
----- | remove the (chronologically) last occurrence of a variable annotation from the context (permanently)
---removeVarAnnot :: VName -> Type -> TypeChecker ()
---removeVarAnnot x t = do
---    modify $ \s -> s{getContext = delete (x, t) (getContext s)}
+-- | check an expression against the given mono type
+check :: Expr -> MonoType -> TypeChecker ()
+check e t = do
+    t' <- infer e
+    unify t t'
+
+processDecl :: Decl -> TypeChecker ()
+processDecl d = case d of
+    -- examples:
+    -- data D a b =  C A1 ... An   adds the annotation C :: \/a.\/b.A1 -> ... -> An -> D a b   to the context
+    -- data D a b = C   adds the annotation C :: \/a.\/b.D a b   to the context (no ->)
+    -- data D = C A1 ... An   adds the annotation C :: A1 -> ... -> An -> D to the context (no forall)
+    --
+    -- Precisely, it quantifies the type parameters and makes each constructor return the data type with all parameters.
+    -- Does so for each constructor
+    DataDecl typeName params cases -> sequence_ (processCase <$> cases)
+            where
+                -- ctx += C :: \/a.\/b. A1 -> ... -> An -> D a b
+                processCase (ConDecl conName args) = modifyContext $ addConAnnot conName (foldr TScheme (TMono arrType) params)
+                    where
+                        -- A1 -> ... -> An -> D a b
+                        arrType = foldr TArr (TCon typeName (TVar <$> params)) args
+
+-- | run type inference for a program, returning the generalized body type
+inferProgram :: Program -> TypeChecker Type
+inferProgram (Program decls body) = do
+    sequence_ (processDecl <$> decls)
+    bodyType <- infer body
+    simplify >=> generalize $ bodyType
 
 -- | infer a type for the given expression using the initial state. Discard the final state (unless there's an error)
 runInference :: Expr -> TCState -> Either (TypeError, TCState) Type
@@ -225,4 +241,7 @@ runInference e = evalStateT (infer >=> simplify >=> generalize $ e)
 
 -- | infer a type for the given expression using the initial state. Include the final state.
 runInferenceAndState :: Expr -> TCState -> Either (TypeError, TCState) (Type, TCState)
-runInferenceAndState e = runStateT (infer >=> simplify >=> generalize $ e)
+runInferenceAndState = runStateT . (infer >=> simplify >=> generalize)
+
+runProgramInference :: Program -> TCState -> Either (TypeError, TCState) (Type, TCState)
+runProgramInference = runStateT . inferProgram

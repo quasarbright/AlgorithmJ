@@ -1,16 +1,7 @@
 module Exprs where
 
 import Data.List
-
--- | variable name
-newtype VName = MkVName{getVName :: String} deriving(Eq, Ord)
-
--- | value constructor name
-newtype CName = MkCName{getCName :: String} deriving(Eq, Ord)
-
-instance Show VName where show = getVName
-
-instance Show CName where show = getCName
+import Names
 
 data Expr = Var VName
           | Con CName
@@ -68,3 +59,24 @@ infixl 9 \$
 infixr 3 \.
 (\.) :: String -> Expr -> Expr
 x \. e = Lam (MkVName x) e
+
+etrue :: Expr
+etrue = con "True"
+
+efalse :: Expr
+efalse = con "False"
+
+elist :: Foldable t => t Expr -> Expr
+elist = foldr (\ a b -> con "Cons" \$ a \$ b) (con "Empty")
+
+ejust :: Expr -> Expr
+ejust = (con "Just" \$)
+
+enothing :: Expr
+enothing = con "Nothing"
+
+eleft :: Expr -> Expr
+eleft = (con "Left" \$)
+
+eright :: Expr -> Expr
+eright = (con "Right" \$)

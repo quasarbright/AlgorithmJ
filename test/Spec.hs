@@ -5,6 +5,8 @@ import Types
 import UnionFind
 import Inference hiding(union, find)
 import qualified Data.Map as Map
+import Names
+import Program
 
 teq :: (Eq a, Show a) => String -> a -> a -> Test
 teq name a b = TestCase (assertEqual name a b)
@@ -24,13 +26,27 @@ ufTests = TestLabel "union find tests" $ TestList
     ]
 
 tInfer :: String -> Expr -> Type -> Test
-tInfer name e t = teq name (Right t) (runInference e initialState)
+tInfer name e t = TestList [teq name (Right t) (runInference e initialState), tInferExprWithPrelude name e t]
+
+tInferExprWithPrelude :: String -> Expr -> Type -> Test
+tInferExprWithPrelude name e t = teq name (Right t) actual
+    where
+        actual = case runProgramInference (exprWithPrelude e) initialState of
+            Left err -> Left err
+            Right (t, _) -> Right t
 
 tInferError :: String -> Expr -> TypeError -> Test
-tInferError name e err = teq name (Left err) actual
+tInferError name e err = TestList [teq name (Left err) actual, tInferErrorWithPrelude name e err]
     where
         result = runInference e initialState
         actual = case result of
+            Left (err, _) -> Left err
+            Right r -> Right r
+
+tInferErrorWithPrelude :: String -> Expr -> TypeError -> Test
+tInferErrorWithPrelude name e err = teq name (Left err) actual
+    where
+        actual = case runProgramInference (exprWithPrelude e) initialState of
             Left (err, _) -> Left err
             Right r -> Right r
 
@@ -50,8 +66,16 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferError "loop" ("x" \. var "x" \$ var "x") (OccursError (MkTVName 1) (tvar 1 \-> tvar 2))
     , tInfer "unit" unit (TMono tunit)
     , tInfer "2-tuple" (tup [int 1, unit]) (TMono $ ttup [tint, tunit])
-    , tInfer "true" (con "True") (TMono $ tcon "Bool" [])
-    , tInfer "false" (con "False") (TMono $ tcon "Bool" [])
+    , tInferExprWithPrelude "true" etrue (TMono tbool)
+    , tInferExprWithPrelude "false" efalse (TMono tbool)
+    , tInferExprWithPrelude "empty" (elist []) (scheme [1] (tlist (tvar 1)))
+    , tInferExprWithPrelude "cons 1 empty" (elist [int 1]) (TMono (tlist tint))
+    , tInferExprWithPrelude "cons 1 (cons 2 empty)" (elist [int 1, int 2]) (TMono (tlist tint))
+    , tInferExprWithPrelude "cons True empty" (elist [etrue]) (TMono (tlist tbool))
+    , tInferExprWithPrelude "nothing" enothing (scheme [1] (tmaybe (tvar 1)))
+    , tInferExprWithPrelude "just True" (ejust etrue) (TMono $ tmaybe tbool)
+    , tInferExprWithPrelude "just nothing" (ejust enothing) (scheme [2] (tmaybe (tmaybe (tvar 2))))
+    , tInferExprWithPrelude "just (just nothing)" (ejust (ejust enothing)) (scheme [3] (tmaybe (tmaybe (tmaybe (tvar 3)))))
     ]
 
 tests = TestList

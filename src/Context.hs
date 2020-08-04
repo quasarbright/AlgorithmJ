@@ -1,9 +1,9 @@
 module Context where
 
-import Exprs
 import Types
 import Data.List
 import qualified Data.Set as Set
+import Names
 
 data ContextItem = VarAnnot VName Type
                  | ConAnnot CName Type

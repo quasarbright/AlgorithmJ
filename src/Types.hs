@@ -2,16 +2,7 @@ module Types where
 
 import qualified Data.Set as Set
 import Data.List(intercalate)
-
--- | Type variable name
-newtype TVName = MkTVName{getTVName :: Integer} deriving(Eq, Ord)
-
-instance Show TVName where show name = 't':show (getTVName name)
-
--- | Type constructor name
-newtype TCName = MkTCName{getTCName :: String} deriving(Eq, Ord)
-
-instance Show TCName where show = getTCName
+import Names
 
 -- | infinite source of variable names
 nameSource :: [TVName]
@@ -103,3 +94,15 @@ tcon name = TCon (MkTCName name)
 infixr 3 \->
 (\->) :: MonoType -> MonoType -> MonoType
 (\->) = TArr
+
+tbool :: MonoType
+tbool = tcon "Bool" []
+
+tlist :: MonoType -> MonoType
+tlist t = tcon "List" [t]
+
+tmaybe :: MonoType -> MonoType
+tmaybe t = tcon "Maybe" [t]
+
+teither :: MonoType -> MonoType -> MonoType
+teither l r = tcon "Either" [l, r]
