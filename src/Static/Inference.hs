@@ -1,13 +1,11 @@
 {-
-TODO tagging
-TODO if tagging, then desugar stuff
-TODO investigate eagerness
+TODO investigate eagerness. now use finalize instead of generalize. pretty eager.
 TODO lets have pattern LHSs
 TODO let f x = ... sugar
-TODO fixed expressions
 TODO let rec
 TODO let rec and
 TODO guards
+TODO type classes (HUGE)
 -}
 
 module Static.Inference where
