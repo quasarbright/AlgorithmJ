@@ -1,4 +1,4 @@
-module Names where
+module Syntax.Names where
 
 -- | variable name
 newtype VName = MkVName{getVName :: String} deriving(Eq, Ord)

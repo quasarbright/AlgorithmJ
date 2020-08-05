@@ -1,8 +1,8 @@
-module Program where
+module Syntax.Program where
 
-import Decls
-import Exprs
-import Types
+import Syntax.Decls
+import Syntax.Exprs
+import Syntax.Types
 import Data.List
 
 data Program = Program [Decl] Expr deriving(Eq, Ord)

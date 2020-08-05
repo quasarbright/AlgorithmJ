@@ -1,9 +1,9 @@
-module Exprs where
+module Syntax.Exprs where
 
 import Data.List
-import Names
-import Types
-import Patterns
+import Syntax.Names
+import Syntax.Types
+import Syntax.Patterns
 
 data Expr = Var VName
           | Con CName

@@ -1,7 +1,7 @@
 {-
-TODO organize your modules into directories
-TODO write down updated rules for pattern checking (now using find) and generalization (now using find) 
-TODO investigate eagerness 
+TODO tagging
+TODO if tagging, then desugar stuff 
+TODO investigate eagerness
 TODO lets have pattern LHSs
 TODO let f x = ... sugar
 TODO fixed expressions
@@ -9,29 +9,26 @@ TODO let rec
 TODO let rec and
 -}
 
-module Inference where
+module Static.Inference where
 
-import Exprs
-import Types
-import qualified UnionFind as UF
+import Syntax.Exprs
+import Syntax.Types
+import qualified Static.UnionFind as UF
 import Control.Monad.Trans.State.Strict
 import Control.Monad.Trans.Class (lift)
 import Control.Monad
-import Context
-import Names
-import Decls
-import Program
-import Patterns
+import Static.Context
+import Syntax.Names
+import Syntax.Decls
+import Syntax.Program
+import Syntax.Patterns
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import Static.Errors
 
 data Reason = Inferring Expr
             | Unifying MonoType MonoType
             deriving(Eq, Ord, Show)
-
-data TypeError = Mismatch MonoType MonoType
-               | OccursError TVName MonoType
-               deriving(Eq, Ord, Show)
 
 data TCState = MkState{ getNameSource :: [TVName], getContext :: Context, getUF :: UF.UnionFind MonoType, getReasons :: [Reason]}
 
@@ -210,12 +207,12 @@ infer e = localReason (Inferring e) $
         Var name -> do
             ctx <- getContext <$> get
             case lookupVar ctx name of
-                Nothing -> error ("unbound var: "++show name)
+                Nothing -> throw (UnboundVar name)
                 Just t -> instantiate t
         Con name -> do
             ctx <- getContext <$> get
             case lookupCon ctx name of
-                Nothing -> error ("unbound value constructor: "++show name)
+                Nothing -> throw (UnboundCon name)
                 Just t -> instantiate t
         EInt{} -> return TInt
         App f x -> do
@@ -238,7 +235,7 @@ infer e = localReason (Inferring e) $
             t <- infer e'
             rhsTypes <- mapM (\ (pat, body) -> processBindingWithBody pat t body) ms
             case rhsTypes of
-                [] -> error "case with no matches" -- TODO wf
+                [] -> throw EmptyCase
                 _ -> zipWithM_ unify rhsTypes (tail rhsTypes)
             return (head rhsTypes)
 
@@ -268,7 +265,7 @@ processBinding pattern t = do
             PCon cName pats -> do
                 ctx <- getContext <$> get
                 (tName, params, types) <- case lookupConDef ctx cName of
-                    Nothing -> error ("unbound value constructor: "++show cName)
+                    Nothing -> throw (UnboundCon cName)
                     Just (tName, params, ConDecl _ types) -> return (tName, params, types)
                 tvars <- freshMonoTypes (length params)
                 let t' = TCon tName tvars

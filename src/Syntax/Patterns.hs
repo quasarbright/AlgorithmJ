@@ -1,8 +1,8 @@
-module Patterns where
+module Syntax.Patterns where
 
-import Types
+import Syntax.Types
 import Data.List
-import Names
+import Syntax.Names
 
 data Pattern = PVar VName
              | PInt Int -- TODO replace with literal type

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c75f5af0acc6ab2772ad3a55b35b675807d17485f0a892b705e40b147f016eee
+-- hash: 216a7513549f013c83c6cbe7b6a502f4ba2f13ddfd3326964a31d3bfba21ad6a
 
 name:           AlgorithmJ
 version:        0.1.0.0
@@ -28,16 +28,17 @@ source-repository head
 library
   exposed-modules:
       Common
-      Context
-      Decls
-      Exprs
-      Inference
       Lib
-      Names
-      Patterns
-      Program
-      Types
-      UnionFind
+      Static.Context
+      Static.Errors
+      Static.Inference
+      Static.UnionFind
+      Syntax.Decls
+      Syntax.Exprs
+      Syntax.Names
+      Syntax.Patterns
+      Syntax.Program
+      Syntax.Types
   other-modules:
       Paths_AlgorithmJ
   hs-source-dirs:

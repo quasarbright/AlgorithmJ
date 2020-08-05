@@ -1,8 +1,8 @@
-module Decls where
+module Syntax.Decls where
 
-import Names
-import Exprs
-import Types
+import Syntax.Names
+import Syntax.Exprs
+import Syntax.Types
 import Data.List
 
 -- | declaration

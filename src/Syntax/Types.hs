@@ -1,8 +1,8 @@
-module Types where
+module Syntax.Types where
 
 import qualified Data.Set as Set
 import Data.List(intercalate)
-import Names
+import Syntax.Names
 import Data.Maybe as Maybe
 
 -- | infinite source of variable names

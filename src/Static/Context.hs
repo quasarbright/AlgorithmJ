@@ -1,9 +1,9 @@
-module Context where
+module Static.Context where
 
-import Types
-import Decls
+import Syntax.Types
+import Syntax.Decls
 import qualified Data.Set as Set
-import Names
+import Syntax.Names
 import Data.List
 
 data ContextItem =

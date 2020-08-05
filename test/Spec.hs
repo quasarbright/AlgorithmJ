@@ -1,13 +1,13 @@
 import Test.HUnit
 import Common
-import Exprs
-import Types
-import UnionFind
-import Inference hiding(union, find)
+import Syntax.Exprs
+import Syntax.Types
+import Static.UnionFind
+import Static.Inference hiding(union, find)
 import qualified Data.Map as Map
-import Names
-import Program
-import Patterns
+import Syntax.Names
+import Syntax.Program
+import Syntax.Patterns
 
 teq :: (Eq a, Show a) => String -> a -> a -> Test
 teq name a b = TestCase (assertEqual name a b)
