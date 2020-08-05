@@ -8,6 +8,7 @@ import qualified Data.Map as Map
 import Syntax.Names
 import Syntax.Program
 import Syntax.Patterns
+import Static.Errors
 
 teq :: (Eq a, Show a) => String -> a -> a -> Test
 teq name a b = TestCase (assertEqual name a b)
@@ -26,17 +27,17 @@ ufTests = TestLabel "union find tests" $ TestList
     , teq "inefficient construction :(" (Map.fromList [(1,5),(2,5),(5,6),(6,6)]) (foldr (\ (a,b) uf -> union b a uf) empty [(5, 6), (1,5), (2,5)])
     ]
 
-tInfer :: String -> Expr -> Type -> Test
+tInfer :: String -> Expr () -> Type -> Test
 tInfer name e t = TestList [teq name (Right t) (runInference e initialState), tInferExprWithPrelude name e t]
 
-tInferExprWithPrelude :: String -> Expr -> Type -> Test
+tInferExprWithPrelude :: String -> Expr () -> Type -> Test
 tInferExprWithPrelude name e t = teq name (Right t) actual
     where
         actual = case runProgramInference (exprWithPrelude e) initialState of
             Left err -> Left err
             Right (t, _) -> Right t
 
-tInferError :: String -> Expr -> TypeError -> Test
+tInferError :: String -> Expr () -> TypeError -> Test
 tInferError name e err = teq name (Left err) actual
     where
         result = runInference e initialState
@@ -44,7 +45,7 @@ tInferError name e err = teq name (Left err) actual
             Left (err, _) -> Left err
             Right r -> Right r
 
-tInferErrorWithPrelude :: String -> Expr -> TypeError -> Test
+tInferErrorWithPrelude :: String -> Expr () -> TypeError -> Test
 tInferErrorWithPrelude name e err = teq name (Left err) actual
     where
         actual = case runProgramInference (exprWithPrelude e) initialState of
@@ -89,26 +90,26 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferErrorWithPrelude "1 :: Bool" (int 1 \:: tbool) (Mismatch tbool tint)
     , tInferErrorWithPrelude "id :: int -> Bool" (var "id" \:: tint \-> tbool) (Mismatch tbool tint)
     , tInfer "case 1 of 1 -> ()" (ecase (int 1) [(pint 1, unit)]) (TMono tunit)
-    , tInfer "match on tuple" (ecase (tup [int 1, unit]) [(ptup [pvar "n", PWild], var "n")]) (TMono tint)
-    , tInfer "fst" ("pair" \. ecase (var "pair") [(ptup [pvar "a", PWild], var "a")]) (scheme [1,2] (ttup [tvar 1, tvar 2] \-> tvar 1))
-    , tInfer "snd" ("pair" \. ecase (var "pair") [(ptup [PWild, pvar "a"], var "a")]) (scheme [1,2] (ttup [tvar 1, tvar 2] \-> tvar 2))
+    , tInfer "match on tuple" (ecase (tup [int 1, unit]) [(ptup [pvar "n", pwild], var "n")]) (TMono tint)
+    , tInfer "fst" ("pair" \. ecase (var "pair") [(ptup [pvar "a", pwild], var "a")]) (scheme [1,2] (ttup [tvar 1, tvar 2] \-> tvar 1))
+    , tInfer "snd" ("pair" \. ecase (var "pair") [(ptup [pwild, pvar "a"], var "a")]) (scheme [1,2] (ttup [tvar 1, tvar 2] \-> tvar 2))
     , tInferExprWithPrelude "if with a match" ("cnd"\."thn"\."els"\. ecase (var "cnd") [(pcon "True" [], var "thn"), (pcon "False" [], var "els")]) (scheme [1] $ tbool \-> tvar 1 \-> tvar 1 \-> tvar 1)
     , tInfer "or pattern" ("pair"\. ecase (var "pair") [(ptup [pint 0, pvar "a"] \| ptup [pvar "a", pint 0], var "a")]) (TMono $ ttup [tint, tint] \-> tint)
-    , tInferExprWithPrelude "list head" ("xs"\. ecase (var "xs") [(pcon "Cons" [pvar "x", PWild], var "x")]) (scheme [1] $ tlist (tvar 1) \-> tvar 1)
-    , tInferExprWithPrelude "list tail" ("xs"\. ecase (var "xs") [(pcon "Cons" [PWild, pvar "xs'"], var "xs'")]) (scheme [1] $ tlist (tvar 1) \-> tlist (tvar 1))
-    , tInferExprWithPrelude "list tail shadow" ("xs"\. ecase (var "xs") [(pcon "Cons" [PWild, pvar "xs"], var "xs")]) (scheme [1] $ tlist (tvar 1) \-> tlist (tvar 1))
+    , tInferExprWithPrelude "list head" ("xs"\. ecase (var "xs") [(pcon "Cons" [pvar "x", pwild], var "x")]) (scheme [1] $ tlist (tvar 1) \-> tvar 1)
+    , tInferExprWithPrelude "list tail" ("xs"\. ecase (var "xs") [(pcon "Cons" [pwild, pvar "xs'"], var "xs'")]) (scheme [1] $ tlist (tvar 1) \-> tlist (tvar 1))
+    , tInferExprWithPrelude "list tail shadow" ("xs"\. ecase (var "xs") [(pcon "Cons" [pwild, pvar "xs"], var "xs")]) (scheme [1] $ tlist (tvar 1) \-> tlist (tvar 1))
     , tInferExprWithPrelude "[] -> [] | xs -> [0]"
-        ("xs"\. ecase (var "xs") [(pcon "Cons" [PWild, pvar "xs'"], con "Cons" \$ int 0 \$ elist[]), (pcon "Empty" [], elist[])])
+        ("xs"\. ecase (var "xs") [(pcon "Cons" [pwild, pvar "xs'"], con "Cons" \$ int 0 \$ elist[]), (pcon "Empty" [], elist[])])
         (scheme [1] $ tlist (tvar 1) \-> tlist tint)
     , tInferExprWithPrelude "put 0 at head"
             ("xs"\. ecase (var "xs")
-                [ (pcon "Cons" [PWild, pvar "xs'"], con "Cons" \$ int 0 \$ var "xs'")
+                [ (pcon "Cons" [pwild, pvar "xs'"], con "Cons" \$ int 0 \$ var "xs'")
                 , (pcon "Empty" [],                 elist[])
                 ])
             (TMono $ tlist tint \-> tlist tint)
     , tInferExprWithPrelude "put 0 at head wildcard"
             ("xs"\. ecase (var "xs")
-                [ (pcon "Cons" [PWild, pvar "xs'"], con "Cons" \$ int 0 \$ var "xs'")
+                [ (pcon "Cons" [pwild, pvar "xs'"], con "Cons" \$ int 0 \$ var "xs'")
                 , (pwild,                           var "xs")
                 ])
             (TMono $ tlist tint \-> tlist tint)
@@ -121,7 +122,7 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferExprWithPrelude "map first element wildcard"
             ("f"\."xs"\. ecase (var "xs")
                 [ (pcon "Cons" [pvar "x", pvar "xs'"], con "Cons" \$ (var "f" \$ var "x") \$ var "xs'")
-                , (PWild,                              var "xs")
+                , (pwild,                              var "xs")
                 ])
             (scheme [1] $ (tvar 1 \-> tvar 1) \-> tlist (tvar 1) \-> tlist (tvar 1))
 --    , tInferExprWithPrelude "maybe bind"

@@ -1,12 +1,13 @@
 {-
 TODO tagging
-TODO if tagging, then desugar stuff 
+TODO if tagging, then desugar stuff
 TODO investigate eagerness
 TODO lets have pattern LHSs
 TODO let f x = ... sugar
 TODO fixed expressions
 TODO let rec
 TODO let rec and
+TODO guards
 -}
 
 module Static.Inference where
@@ -26,58 +27,58 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Static.Errors
 
-data Reason = Inferring Expr
+data Reason a = Inferring (Expr a)
             | Unifying MonoType MonoType
             deriving(Eq, Ord, Show)
 
-data TCState = MkState{ getNameSource :: [TVName], getContext :: Context, getUF :: UF.UnionFind MonoType, getReasons :: [Reason]}
+data TCState a = MkState{ getNameSource :: [TVName], getContext :: Context a, getUF :: UF.UnionFind MonoType, getReasons :: [Reason a]}
 
-instance Show TCState where
+instance Show (TCState a) where
     show s = "context: "++show (getContext s)++"\n\nunion find: "++show (getUF s)++"\n\nreasons: "++show (getReasons s)
 
-instance Eq TCState where
+instance Eq a => Eq (TCState a) where
     MkState _ ctx uf reasons == MkState _ ctx' uf' reasons' = (ctx, uf, reasons) == (ctx', uf', reasons')
 
-initialState :: TCState
+initialState :: TCState a
 initialState = MkState nameSource [] UF.empty []
 
-type TypeChecker a = StateT TCState (Either (TypeError, TCState)) a
+type TypeChecker tag ret = StateT (TCState tag) (Either (TypeError, TCState tag)) ret
 
 
 -- utilities
 
 -- | modify the context (permanently)
-modifyContext :: (Context -> Context) -> TypeChecker ()
+modifyContext :: (Context a -> Context a) -> TypeChecker a ()
 modifyContext f = modify $ \s -> s{getContext = f . getContext $ s}
 
 -- | get a fresh type name
-freshName :: TypeChecker TVName
+freshName :: TypeChecker a TVName
 freshName = do
     ~(n:ns) <- getNameSource <$> get
     modify $ \s -> s{getNameSource = ns}
     return n
 
 -- | get a fresh type variable type
-freshMonoType :: TypeChecker MonoType
+freshMonoType :: TypeChecker a MonoType
 freshMonoType = TVar <$> freshName
 
 -- | get n fresh type variable types
-freshMonoTypes :: Int -> TypeChecker [MonoType]
+freshMonoTypes :: Int -> TypeChecker a [MonoType]
 freshMonoTypes n = replicateM n freshMonoType
 
 -- | throw a type error
-throw :: TypeError -> TypeChecker a
+throw :: TypeError -> TypeChecker a b
 throw err = do
     s <- get
     lift (Left (err, s))
 
 -- | throw a mismatch error
-mismatch :: MonoType -> MonoType -> TypeChecker a
+mismatch :: MonoType -> MonoType -> TypeChecker a b
 mismatch a b = throw (Mismatch a b)
 
 -- | Temporarily manipulate the context for the given computation, and restore it afterwards.
 -- NOTE: still modifies name source and union-find permanently
-localCtx :: (Context -> Context) -> TypeChecker a -> TypeChecker a
+localCtx :: (Context a -> Context a) -> TypeChecker a b -> TypeChecker a b
 localCtx f computation = do
     oldCtx <- getContext <$> get
     modify $ \s -> s{getContext=f (getContext s)}
@@ -88,17 +89,17 @@ localCtx f computation = do
 -- | Temporarily include a variable annotation in the context for the given computation, and restore the original context
 -- afterwards.
 -- NOTE: still modifies name source and union find permanently
-localVarAnnot :: VName -> Type -> TypeChecker a -> TypeChecker a
+localVarAnnot :: VName -> Type -> TypeChecker a b -> TypeChecker a b
 localVarAnnot x t = localCtx (addVarAnnot x t)
 
 -- | Temporarily add many variable annotations to the context for the given computation, and restore thr original context
 -- afterwards.
-localVarAnnots :: Foldable t => t (VName, Type) -> TypeChecker a -> TypeChecker a
+localVarAnnots :: Foldable t => t (VName, Type) -> TypeChecker a b -> TypeChecker a b
 localVarAnnots annots = localCtx (\ ctx -> (foldr (uncurry addVarAnnot) ctx annots))
 
 -- | Temporarily add a reason for the given computation, and restore the original reasons afterwards.
 -- NOTE: still modifies name source and union find permanently
-localReason :: Reason -> TypeChecker a -> TypeChecker a
+localReason :: Reason a -> TypeChecker a b -> TypeChecker a b
 localReason reason computation = do
     oldReasons <- getReasons <$> get
     modify $ \s -> s{getReasons=reason:oldReasons}
@@ -111,7 +112,7 @@ localReason reason computation = do
 
 
 -- | attempt to unify two types
-unify :: MonoType -> MonoType -> TypeChecker ()
+unify :: MonoType -> MonoType -> TypeChecker a ()
 unify a b = localReason (Unifying a b) $ do
     a' <- find a
     b' <- find b
@@ -134,34 +135,34 @@ unify a b = localReason (Unifying a b) $ do
         (TCon{}, _) -> err
 
 -- | unify a type variable and a type
-unifyHelp :: TVName -> MonoType -> MonoType -> MonoType -> TypeChecker ()
+unifyHelp :: TVName -> MonoType -> MonoType -> MonoType -> TypeChecker a ()
 unifyHelp name t a' b' = do
     -- occurs check
     when (name `elem` getMonoTypeFreeVars t) (throw (OccursError name t))
     a' `union` b'
 
 -- | union two mono types
-union :: MonoType -> MonoType -> TypeChecker ()
+union :: MonoType -> MonoType -> TypeChecker a ()
 union a b = do
     uf <- getUF <$> get
     let uf' = UF.union a b uf
     modify $ \s -> s{getUF = uf'}
 
 -- | find the representative of the given type
-find :: MonoType -> TypeChecker MonoType
+find :: MonoType -> TypeChecker a MonoType
 find t = do
     uf <- getUF <$> get
     return (UF.find uf t)
 
 -- | monomorphize a scheme by replacing the quantified variable with a fresh mono type
-instantiate :: Type -> TypeChecker MonoType
+instantiate :: Type -> TypeChecker a MonoType
 instantiate (TScheme name body) = do
     tau <- freshMonoType
     instantiate (substituteType name tau body)
 instantiate (TMono t) = return t
 
 -- | polymorphize a mono type by quantifying all unbound variables occurring in it
-generalize :: MonoType -> TypeChecker Type
+generalize :: MonoType -> TypeChecker a Type
 generalize t = do
     ctx <- getContext <$> get
     uf <- getUF <$> get
@@ -184,54 +185,54 @@ blindGeneralize t = foldr TScheme (TMono t) fvs
     where fvs = getMonoTypeFreeVars t
 
 -- | simplify a type by repeatedly substituting its free variables for their solutions
-simplify :: MonoType -> TypeChecker MonoType
+simplify :: MonoType -> TypeChecker a MonoType
 simplify t = do
     t' <- _stepSimplify t
     if t == t' then return t else simplify t'
 
 -- | simplify a type one level by substituting all its free variables for their solutions
-_stepSimplify :: MonoType -> TypeChecker MonoType
+_stepSimplify :: MonoType -> TypeChecker a MonoType
 _stepSimplify t = do
     let fvs = getMonoTypeFreeVars t
     foldM (\ t' name -> liftM3 substituteMonoType (return name) (find (TVar name)) (return t')) t fvs
 
 -- | simplify and generalize the mono type
-finalizeMonoType :: MonoType -> TypeChecker Type
+finalizeMonoType :: MonoType -> TypeChecker a Type
 finalizeMonoType = simplify >=> return . reduceMonoVars >=> return . blindGeneralize
 
 
 -- | Infer a type for the given expression
-infer :: Expr -> TypeChecker MonoType
+infer :: Expr a -> TypeChecker a MonoType
 infer e = localReason (Inferring e) $
     case e of
-        Var name -> do
+        Var name _ -> do
             ctx <- getContext <$> get
             case lookupVar ctx name of
                 Nothing -> throw (UnboundVar name)
                 Just t -> instantiate t
-        Con name -> do
+        Con name _ -> do
             ctx <- getContext <$> get
             case lookupCon ctx name of
                 Nothing -> throw (UnboundCon name)
                 Just t -> instantiate t
         EInt{} -> return TInt
-        App f x -> do
+        App f x _ -> do
             fType <- infer f
             xType <- infer x
             retType <- freshMonoType
             unify fType (TArr xType retType)
             return retType
-        Lam x body -> do
+        Lam x body _ -> do
             argType <- freshMonoType
             retType <- localVarAnnot x (TMono argType) $ infer body
             return $ TArr argType retType
-        Let x value body -> do
+        Let x value body _ -> do
             valueType <- infer value
             valueType' <- generalize valueType
             localVarAnnot x valueType' $ infer body
-        Tup es -> TTup <$> mapM infer es
-        Annot e' t -> check e' t >> return t
-        Case e' ms -> do
+        Tup es _ -> TTup <$> mapM infer es
+        Annot e' t _ -> check e' t >> return t
+        Case e' ms _ -> do
             t <- infer e'
             rhsTypes <- mapM (\ (pat, body) -> processBindingWithBody pat t body) ms
             case rhsTypes of
@@ -242,7 +243,7 @@ infer e = localReason (Inferring e) $
 
 
 -- | check an expression against the given mono type
-check :: Expr -> MonoType -> TypeChecker ()
+check :: Expr a -> MonoType -> TypeChecker a ()
 check e t = do
     t' <- infer e
     unify t t'
@@ -250,23 +251,23 @@ check e t = do
 -- | determines the mono types of variables when the given pattern is bound to an expression of the given type.
 -- For example, (x,y) = (1,id) will output {x:Int,y:(a -> a)} (not forall a . a -> a, just a -> a).
 -- NOTE: You must generalize the output variables after calling!
-processBinding :: Pattern -> MonoType -> TypeChecker (Map.Map VName MonoType)
+processBinding :: Pattern a -> MonoType -> TypeChecker a (Map.Map VName MonoType)
 processBinding pattern t = do
     case pattern of
-            PVar name -> return $ Map.singleton name t
+            PVar name _ -> return $ Map.singleton name t
             PInt{} -> unify tint t >> return Map.empty
-            PTup pats -> do
+            PTup pats _ -> do
                 -- assume no name repeats TODO wf
                 tvars <- freshMonoTypes (length pats)
                 let t' = ttup tvars
                 unify t' t
                 tvars' <- mapM find tvars -- necessary to prevent everything from being quantified in the end
                 Map.unions <$> zipWithM processBinding pats tvars'
-            PCon cName pats -> do
+            PCon cName pats _ -> do
                 ctx <- getContext <$> get
                 (tName, params, types) <- case lookupConDef ctx cName of
                     Nothing -> throw (UnboundCon cName)
-                    Just (tName, params, ConDecl _ types) -> return (tName, params, types)
+                    Just (tName, params, ConDecl _ types _) -> return (tName, params, types)
                 tvars <- freshMonoTypes (length params)
                 let t' = TCon tName tvars
                 unify t' t
@@ -277,7 +278,7 @@ processBinding pattern t = do
                 -- recursively zip through the child patterns and the product type's subtypes
                 -- assume correct arity TODO wf
                 Map.unions <$> zipWithM processBinding pats types'
-            POr left right -> do
+            POr left right _ -> do
                 leftResult <- Map.toAscList <$>  processBinding left t
                 rightResult <- Map.toAscList <$> processBinding right t
                 -- assume same domains TODO wf
@@ -285,8 +286,8 @@ processBinding pattern t = do
                 finalRange <- mapM (find . snd) leftResult
                 let finalResult = Map.fromAscList (zip (fst <$> leftResult) (finalRange))
                 return finalResult
-            PWild -> return (Map.empty)
-            PAnnot pat t' -> do
+            PWild _ -> return (Map.empty)
+            PAnnot pat t' _ -> do
                 unify t' t
                 processBinding pat t'
 
@@ -294,7 +295,7 @@ processBinding pattern t = do
 -- Like @let p = e in body@ or @case e of ... | p -> body | ...@.
 -- NOTE: do NOT use for lambdas because this generalizes all variables' types before checking the body, and lambda arguments
 --   need to be mono types
-processBindingWithBody :: Pattern -> MonoType -> Expr -> TypeChecker MonoType
+processBindingWithBody :: Pattern a -> MonoType -> Expr a -> TypeChecker a MonoType
 processBindingWithBody pat t body = do
     newVarAnnots <- Map.toList <$> processBinding pat t
 --    ctx <- getContext <$> get
@@ -303,7 +304,7 @@ processBindingWithBody pat t body = do
     localVarAnnots generalizedVarAnnots (infer body)
 
 -- | Record the declaration in the program, adding its definitions to the context
-processDecl :: Decl -> TypeChecker ()
+processDecl :: Eq a => Decl a -> TypeChecker a ()
 processDecl d = case d of
     -- examples:
     -- data D a b =  C A1 ... An   adds the annotation C :: \/a.\/b.A1 -> ... -> An -> D a b   to the context
@@ -312,15 +313,15 @@ processDecl d = case d of
     --
     -- Precisely, it quantifies the type parameters and makes each constructor return the data type with all parameters.
     -- Does so for each constructor
-    DataDecl typeName params cases -> addData >> sequence_ (processCase <$> cases)
+    DataDecl typeName params cases tag -> addData >> sequence_ (processCase <$> cases)
             where
-                addData = modifyContext (addDataInfo typeName params cases) -- didn't want to clutter the line
+                addData = modifyContext (addDataInfo typeName params cases tag) -- didn't want to clutter the line
                 -- ctx += C :: \/a.\/b. A1 -> ... -> An -> D a b
-                processCase (ConDecl conName args) = modifyContext $ addConAnnot conName (foldr TScheme (TMono arrType) params)
+                processCase (ConDecl conName args _) = modifyContext $ addConAnnot conName (foldr TScheme (TMono arrType) params)
                     where
                         -- A1 -> ... -> An -> D a b
                         arrType = foldr TArr (TCon typeName (TVar <$> params)) args
-    VarDecl name value -> do
+    VarDecl name value _ -> do
         -- TODO abstract with let when things get more complicated. maybe inferBinding :: Binding -> Map VName Type or something
         -- careful, should let (id1, id2) = (\x.x, \x.x) result in ids? YES
         valueType <- infer value
@@ -328,19 +329,19 @@ processDecl d = case d of
         modifyContext $ addVarAnnot name valueType'
 
 -- | run type inference for a program, returning the generalized body type
-inferProgram :: Program -> TypeChecker Type
-inferProgram (Program decls body) = do
+inferProgram :: Eq a => Program a -> TypeChecker a Type
+inferProgram (Program decls body _) = do
     sequence_ (processDecl <$> decls)
     bodyType <- infer body
     finalizeMonoType bodyType
 
 -- | infer a type for the given expression using the initial state. Discard the final state (unless there's an error)
-runInference :: Expr -> TCState -> Either (TypeError, TCState) Type
+runInference :: Expr a -> TCState a -> Either (TypeError, TCState a) Type
 runInference = evalStateT . (infer >=> finalizeMonoType)
 
 -- | infer a type for the given expression using the initial state. Include the final state.
-runInferenceAndState :: Expr -> TCState -> Either (TypeError, TCState) (Type, TCState)
+runInferenceAndState :: Expr a -> TCState a -> Either (TypeError, TCState a) (Type, TCState a)
 runInferenceAndState = runStateT . (infer >=> finalizeMonoType)
 
-runProgramInference :: Program -> TCState -> Either (TypeError, TCState) (Type, TCState)
+runProgramInference :: Eq a => Program a -> TCState a -> Either (TypeError, TCState a) (Type, TCState a)
 runProgramInference = runStateT . inferProgram

@@ -4,16 +4,16 @@ import Syntax.Types
 import Data.List
 import Syntax.Names
 
-data Pattern = PVar VName
-             | PInt Int -- TODO replace with literal type
-             | PCon CName [Pattern]
-             | PTup [Pattern]
-             | POr Pattern Pattern
-             | PWild
-             | PAnnot Pattern MonoType
+data Pattern a = PVar VName a
+             | PInt Int a -- TODO replace with literal type
+             | PCon CName [Pattern a] a
+             | PTup [Pattern a] a
+             | POr (Pattern a) (Pattern a) a
+             | PWild a
+             | PAnnot (Pattern a) MonoType a
              deriving(Eq, Ord)
 
-instance Show Pattern where
+instance Show (Pattern a) where
     showsPrec p pat =
         let p' = case pat of
                 PVar{} -> 10
@@ -24,40 +24,40 @@ instance Show Pattern where
                 PWild{} -> 10
                 PAnnot{} -> 1
         in case pat of
-            PVar name -> shows name
-            PInt n -> shows n
-            PCon name [] -> shows name
-            PCon name pats -> showParen (p > p') $ shows name . showString " " . foldr1 (\ a b -> a . showString " " . b) (showsPrec (p'+1) <$> pats)
-            PTup pats -> showParen True $ showString (intercalate ", " (show <$> pats))
-            POr left right -> showParen (p > p') $ showsPrec p' left . showString " | " . showsPrec p' right
-            PWild -> showString "_"
-            PAnnot pat' t -> showParen (p > p') $ showsPrec p' pat' . showString " :: " . shows t
+            PVar name _ -> shows name
+            PInt n _ -> shows n
+            PCon name [] _ -> shows name
+            PCon name pats _ -> showParen (p > p') $ shows name . showString " " . foldr1 (\ a b -> a . showString " " . b) (showsPrec (p'+1) <$> pats)
+            PTup pats _ -> showParen True $ showString (intercalate ", " (show <$> pats))
+            POr left right _ -> showParen (p > p') $ showsPrec p' left . showString " | " . showsPrec p' right
+            PWild _ -> showString "_"
+            PAnnot pat' t _ -> showParen (p > p') $ showsPrec p' pat' . showString " :: " . shows t
 
 
 -- combinators for constructing patterns
 
-pvar :: String -> Pattern
-pvar = PVar . MkVName
+pvar :: String -> Pattern ()
+pvar x = PVar (MkVName x) ()
 
-pint :: Int -> Pattern
-pint = PInt
+pint :: Int -> Pattern ()
+pint = flip PInt ()
 
-pcon :: String -> [Pattern] -> Pattern
-pcon name = PCon (MkCName name)
+pcon :: String -> [Pattern ()] -> Pattern ()
+pcon name pats = PCon (MkCName name) pats ()
 
-ptup :: [Pattern] -> Pattern
-ptup = PTup
+ptup :: [Pattern ()] -> Pattern ()
+ptup = flip PTup ()
 
-por :: [Pattern] -> Pattern
+por :: [Pattern ()] -> Pattern ()
 por [] = error "cannot construct empty or pattern"
-por pats = foldr1 POr pats
+por pats = foldr1 (\ l r -> POr l r ()) pats
 
 infixl 3 \|
-(\|) :: Pattern -> Pattern -> Pattern
-(\|) = POr
+(\|) :: Pattern () -> Pattern () -> Pattern ()
+(\|) l r = POr l r ()
 
-pwild :: Pattern
-pwild = PWild
+pwild :: Pattern ()
+pwild = PWild ()
 
-pannot :: Pattern -> MonoType -> Pattern
-pannot = PAnnot
+pannot :: Pattern () -> MonoType -> Pattern ()
+pannot p t = PAnnot p t ()
