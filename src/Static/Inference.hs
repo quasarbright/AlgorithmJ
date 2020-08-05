@@ -42,7 +42,7 @@ instance Eq a => Eq (TCState a) where
 initialState :: TCState a
 initialState = MkState nameSource [] UF.empty []
 
-type TypeChecker tag ret = StateT (TCState tag) (Either (TypeError, TCState tag)) ret
+type TypeChecker tag ret = StateT (TCState tag) (Either (StaticError, TCState tag)) ret
 
 
 -- utilities
@@ -67,7 +67,7 @@ freshMonoTypes :: Int -> TypeChecker a [MonoType]
 freshMonoTypes n = replicateM n freshMonoType
 
 -- | throw a type error
-throw :: TypeError -> TypeChecker a b
+throw :: StaticError -> TypeChecker a b
 throw err = do
     s <- get
     lift (Left (err, s))
@@ -336,12 +336,12 @@ inferProgram (Program decls body _) = do
     finalizeMonoType bodyType
 
 -- | infer a type for the given expression using the initial state. Discard the final state (unless there's an error)
-runInference :: Expr a -> TCState a -> Either (TypeError, TCState a) Type
+runInference :: Expr a -> TCState a -> Either (StaticError, TCState a) Type
 runInference = evalStateT . (infer >=> finalizeMonoType)
 
 -- | infer a type for the given expression using the initial state. Include the final state.
-runInferenceAndState :: Expr a -> TCState a -> Either (TypeError, TCState a) (Type, TCState a)
+runInferenceAndState :: Expr a -> TCState a -> Either (StaticError, TCState a) (Type, TCState a)
 runInferenceAndState = runStateT . (infer >=> finalizeMonoType)
 
-runProgramInference :: Eq a => Program a -> TCState a -> Either (TypeError, TCState a) (Type, TCState a)
+runProgramInference :: Eq a => Program a -> TCState a -> Either (StaticError, TCState a) (Type, TCState a)
 runProgramInference = runStateT . inferProgram

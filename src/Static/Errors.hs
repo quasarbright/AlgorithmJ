@@ -3,7 +3,7 @@ module Static.Errors where
 import Syntax.Names
 import Syntax.Types
 
-data TypeError = Mismatch MonoType MonoType
+data StaticError = Mismatch MonoType MonoType
                | OccursError TVName MonoType
                | UnboundVar VName
                | UnboundCon CName

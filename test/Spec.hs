@@ -37,7 +37,7 @@ tInferExprWithPrelude name e t = teq name (Right t) actual
             Left err -> Left err
             Right (t, _) -> Right t
 
-tInferError :: String -> Expr () -> TypeError -> Test
+tInferError :: String -> Expr () -> StaticError -> Test
 tInferError name e err = teq name (Left err) actual
     where
         result = runInference e initialState
@@ -45,7 +45,7 @@ tInferError name e err = teq name (Left err) actual
             Left (err, _) -> Left err
             Right r -> Right r
 
-tInferErrorWithPrelude :: String -> Expr () -> TypeError -> Test
+tInferErrorWithPrelude :: String -> Expr () -> StaticError -> Test
 tInferErrorWithPrelude name e err = teq name (Left err) actual
     where
         actual = case runProgramInference (exprWithPrelude e) initialState of
