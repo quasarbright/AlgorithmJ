@@ -125,19 +125,30 @@ inferenceTests = TestLabel "inference tests" $ TestList
                 , (pwild,                              var "xs")
                 ])
             (scheme [1] $ (tvar 1 \-> tvar 1) \-> tlist (tvar 1) \-> tlist (tvar 1))
---    , tInferExprWithPrelude "maybe bind"
     , tInferExprWithPrelude "compose" (var "compose") (scheme [1,2,3] $ (tvar 2 \-> tvar 3) \-> (tvar 1 \-> tvar 2) \-> (tvar 1 \-> tvar 3))
     , tInferErrorWithPrelude "use compose backwards"
         (elet "ignore" ("x"\. unit)
         (elet "fst" ("pair" \. ecase (var "pair") [(ptup [pvar "a", pwild], var "a")])
         (var "compose" \$ var "fst" \$ var "ignore")))
         (Mismatch (ttup [tvar 1, tvar 2]) tunit)
-        
+
     , tInferExprWithPrelude "use compose"
         (elet "ignore" ("x"\. unit)
         (elet "fst" ("pair" \. ecase (var "pair") [(ptup [pvar "a", pwild], var "a")])
         (var "compose" \$ var "ignore" \$ var "fst")))
         (scheme [1,2] (ttup [tvar 1,tvar 2] \-> tunit))
+    , tInferExprWithPrelude "maybe bind"
+        ("mx"\."f"\.
+            ecase (var "mx")
+                [ (pcon "Just" [pvar "x"], var "f" \$ var "x")
+                , (pcon "Nothing" []     , enothing)])
+        (scheme [1,2] (tmaybe (tvar 1) \-> (tvar 1 \-> tmaybe (tvar 2)) \-> tmaybe (tvar 2)))
+    , tInferExprWithPrelude "maybe bind accidentally restricted"
+        ("mx"\."f"\.
+            ecase (var "mx")
+                [ (pcon "Just" [pvar "x"], var "f" \$ var "x")
+                , (pwild                 , var "mx")]) -- this restricts the generalization of f
+        (scheme [1] (tmaybe (tvar 1) \-> (tvar 1 \-> tmaybe (tvar 1)) \-> tmaybe (tvar 1)))
     ]
 
 tests = TestList
