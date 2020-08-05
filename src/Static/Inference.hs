@@ -70,7 +70,21 @@ freshMonoTypes n = replicateM n freshMonoType
 throw :: StaticError -> TypeChecker a b
 throw err = do
     s <- get
-    lift (Left (err, s))
+    err' <- simplifyErrorTypes err
+    lift (Left (err', s))
+
+-- | simplifies the types mentioned in an error if possible
+simplifyErrorTypes :: StaticError -> TypeChecker a StaticError
+simplifyErrorTypes err = case err of
+    Mismatch expected actual -> do
+        v <- freshMonoType
+        let t = ttup [v, expected, actual]
+        t' <- simplify t
+        let ~(TTup [_,expected',actual']) = reduceMonoVars t'
+        return (Mismatch expected' actual')
+    _ -> return err
+
+
 
 -- | throw a mismatch error
 mismatch :: MonoType -> MonoType -> TypeChecker a b
@@ -228,7 +242,7 @@ infer e = localReason (Inferring e) $
             return $ TArr argType retType
         Let x value body _ -> do
             valueType <- infer value
-            valueType' <- generalize valueType
+            valueType' <- finalizeMonoType valueType
             localVarAnnot x valueType' $ infer body
         Tup es _ -> TTup <$> mapM infer es
         Annot e' t _ -> check e' t >> return t
@@ -325,7 +339,7 @@ processDecl d = case d of
         -- TODO abstract with let when things get more complicated. maybe inferBinding :: Binding -> Map VName Type or something
         -- careful, should let (id1, id2) = (\x.x, \x.x) result in ids? YES
         valueType <- infer value
-        valueType' <- generalize valueType
+        valueType' <- finalizeMonoType valueType
         modifyContext $ addVarAnnot name valueType'
 
 -- | run type inference for a program, returning the generalized body type

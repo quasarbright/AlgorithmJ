@@ -126,7 +126,18 @@ inferenceTests = TestLabel "inference tests" $ TestList
                 ])
             (scheme [1] $ (tvar 1 \-> tvar 1) \-> tlist (tvar 1) \-> tlist (tvar 1))
 --    , tInferExprWithPrelude "maybe bind"
-    -- TODO investigate weird inferred signature of compose.
+    , tInferExprWithPrelude "compose" (var "compose") (scheme [1,2,3] $ (tvar 2 \-> tvar 3) \-> (tvar 1 \-> tvar 2) \-> (tvar 1 \-> tvar 3))
+    , tInferErrorWithPrelude "use compose backwards"
+        (elet "ignore" ("x"\. unit)
+        (elet "fst" ("pair" \. ecase (var "pair") [(ptup [pvar "a", pwild], var "a")])
+        (var "compose" \$ var "fst" \$ var "ignore")))
+        (Mismatch (ttup [tvar 1, tvar 2]) tunit)
+        
+    , tInferExprWithPrelude "use compose"
+        (elet "ignore" ("x"\. unit)
+        (elet "fst" ("pair" \. ecase (var "pair") [(ptup [pvar "a", pwild], var "a")])
+        (var "compose" \$ var "ignore" \$ var "fst")))
+        (scheme [1,2] (ttup [tvar 1,tvar 2] \-> tunit))
     ]
 
 tests = TestList
