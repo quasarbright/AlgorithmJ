@@ -3,9 +3,10 @@ module Syntax.Patterns where
 import Syntax.Types
 import Data.List
 import Syntax.Names
+import Syntax.Literals
 
 data Pattern a = PVar VName a
-             | PInt Int a -- TODO replace with literal type
+             | PLiteral (Literal a) a
              | PCon CName [Pattern a] a
              | PTup [Pattern a] a
              | POr (Pattern a) (Pattern a) a
@@ -17,7 +18,7 @@ instance Show (Pattern a) where
     showsPrec p pat =
         let p' = case pat of
                 PVar{} -> 10
-                PInt{} -> 10
+                PLiteral{} -> 10
                 PCon{} -> 9
                 PTup{} -> 10
                 POr{} -> 3
@@ -25,7 +26,7 @@ instance Show (Pattern a) where
                 PAnnot{} -> 1
         in case pat of
             PVar name _ -> shows name
-            PInt n _ -> shows n
+            PLiteral l _ -> shows l
             PCon name [] _ -> shows name
             PCon name pats _ -> showParen (p > p') $ shows name . showString " " . foldr1 (\ a b -> a . showString " " . b) (showsPrec (p'+1) <$> pats)
             PTup pats _ -> showParen True $ showString (intercalate ", " (show <$> pats))
@@ -40,7 +41,16 @@ pvar :: String -> Pattern ()
 pvar x = PVar (MkVName x) ()
 
 pint :: Int -> Pattern ()
-pint = flip PInt ()
+pint n = PLiteral (LInt n ()) ()
+
+pdouble :: Double -> Pattern ()
+pdouble d = PLiteral (LDouble d ()) ()
+
+pchar :: Char -> Pattern ()
+pchar c = PLiteral (LChar c ()) ()
+
+pstring :: String -> Pattern ()
+pstring s = PLiteral (LString s ()) ()
 
 pcon :: String -> [Pattern ()] -> Pattern ()
 pcon name pats = PCon (MkCName name) pats ()

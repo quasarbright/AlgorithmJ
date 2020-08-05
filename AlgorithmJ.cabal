@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 216a7513549f013c83c6cbe7b6a502f4ba2f13ddfd3326964a31d3bfba21ad6a
+-- hash: 4c3f8cd4a59e3a0cf5d5e6e8d4522fc2e0908053b92ce9b7db6eab8e74b56885
 
 name:           AlgorithmJ
 version:        0.1.0.0
@@ -35,6 +35,7 @@ library
       Static.UnionFind
       Syntax.Decls
       Syntax.Exprs
+      Syntax.Literals
       Syntax.Names
       Syntax.Patterns
       Syntax.Program

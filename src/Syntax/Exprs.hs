@@ -4,10 +4,11 @@ import Data.List
 import Syntax.Names
 import Syntax.Types
 import Syntax.Patterns
+import Syntax.Literals
 
 data Expr a = Var VName a
           | Con CName a
-          | EInt Int a -- TODO replace with literal type
+          | ELiteral (Literal a) a
           | Lam VName (Expr a) a
           | App (Expr a) (Expr a) a
           | Let VName (Expr a) (Expr a) a
@@ -20,7 +21,7 @@ instance Show (Expr a) where
     showsPrec p e =
         let p' = case e of
                 Var{} -> 10
-                EInt{} -> 10
+                ELiteral{} -> 10
                 Lam{} -> 3
                 App{} -> 9
                 Let{} -> 3
@@ -31,7 +32,7 @@ instance Show (Expr a) where
         in case e of
             Var name _ -> shows name
             Con name _ -> shows name
-            EInt n _ -> shows n
+            ELiteral l _ -> shows l
             Lam name body _ -> showParen (p > p') $ showString "\\" . shows name . showString "." . showsPrec p' body
             App f x _ -> showParen (p > p') $ showsPrec p' f . showString " " . showsPrec (p' + 1) x
             Let x value body _ -> showParen (p > p') $ showString "let " . shows x . showString " = " . shows value . showString " in " . shows body
@@ -50,7 +51,16 @@ con :: String -> Expr ()
 con c = Con (MkCName c) ()
 
 int :: Int -> Expr ()
-int n = EInt n ()
+int n = ELiteral (LInt n ()) ()
+
+double :: Double -> Expr ()
+double d = ELiteral (LDouble d ()) ()
+
+char :: Char -> Expr ()
+char c = ELiteral (LChar c ()) ()
+
+string :: String -> Expr ()
+string s = ELiteral (LString s ()) ()
 
 elet :: String -> Expr () -> Expr () -> Expr ()
 elet name value body = Let (MkVName name) value body ()

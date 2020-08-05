@@ -6,12 +6,16 @@ TODO let rec
 TODO let rec and
 TODO guards
 TODO type classes (HUGE)
+TODO type aliases
+TODO literals and primitive types
+TODO exceptions and top
 -}
 
 module Static.Inference where
 
 import Syntax.Exprs
 import Syntax.Types
+import Syntax.Literals
 import qualified Static.UnionFind as UF
 import Control.Monad.Trans.State.Strict
 import Control.Monad.Trans.Class (lift)
@@ -134,6 +138,8 @@ unify a b = localReason (Unifying a b) $ do
         (TVar name, t) -> unifyHelp name t a' b'
         (t, TVar name) -> unifyHelp name t a' b'
         (TInt, TInt) -> return ()
+        (TDouble, TDouble) -> return ()
+        (TChar, TChar) -> return ()
         (TArr arg ret, TArr arg' ret') -> unify arg arg' >> unify ret ret'
         (TTup tys, TTup tys')
             | length tys == length tys' -> zipWithM_ unify tys tys'
@@ -142,6 +148,8 @@ unify a b = localReason (Unifying a b) $ do
             | name == name' && length tys == length tys' -> zipWithM_ unify tys tys'
             | otherwise -> err
         (TInt,   _) -> err
+        (TDouble,   _) -> err
+        (TChar,   _) -> err
         (TArr{}, _) -> err
         (TTup{}, _) -> err
         (TCon{}, _) -> err
@@ -227,7 +235,7 @@ infer e = localReason (Inferring e) $
             case lookupCon ctx name of
                 Nothing -> throw (UnboundCon name)
                 Just t -> instantiate t
-        EInt{} -> return TInt
+        ELiteral l _ -> return (typeOfLiteral l)
         App f x _ -> do
             fType <- infer f
             xType <- infer x
@@ -253,7 +261,6 @@ infer e = localReason (Inferring e) $
             return (head rhsTypes)
 
 
-
 -- | check an expression against the given mono type
 check :: Expr a -> MonoType -> TypeChecker a ()
 check e t = do
@@ -267,7 +274,7 @@ processBinding :: Pattern a -> MonoType -> TypeChecker a (Map.Map VName MonoType
 processBinding pattern t = do
     case pattern of
             PVar name _ -> return $ Map.singleton name t
-            PInt{} -> unify tint t >> return Map.empty
+            PLiteral l _ -> unify (typeOfLiteral l) t >> return Map.empty
             PTup pats _ -> do
                 -- assume no name repeats TODO wf
                 tvars <- freshMonoTypes (length pats)
@@ -339,6 +346,13 @@ processDecl d = case d of
         valueType <- infer value
         valueType' <- finalizeMonoType valueType
         modifyContext $ addVarAnnot name valueType'
+
+-- | Infer the type of the given literal
+typeOfLiteral :: Literal a -> MonoType
+typeOfLiteral LInt{} = tint
+typeOfLiteral LDouble{} = tdouble
+typeOfLiteral LChar{} = tchar
+typeOfLiteral LString{} = tstring
 
 -- | run type inference for a program, returning the generalized body type
 inferProgram :: Eq a => Program a -> TypeChecker a Type

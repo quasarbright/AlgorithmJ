@@ -55,6 +55,9 @@ tInferErrorWithPrelude name e err = teq name (Left err) actual
 inferenceTests = TestLabel "inference tests" $ TestList
     [ tpass
     , tInfer "int" (int 1) (TMono tint)
+    , tInfer "double" (double 1.0) (TMono tdouble)
+    , tInfer "char" (char 'a') (TMono tchar)
+    , tInferExprWithPrelude "string" (string "hello") (TMono tstring)
     , tInfer "let x = 1 in x" (elet "x" (int 1) (var "x")) (TMono tint)
     , tInfer "id" ("x" \. var "x") (scheme [1] (tvar 1 \-> tvar 1))
     , tInfer "church true" ("x" \. "y" \. var "x") (scheme [1, 2] (tvar 1 \-> tvar 2 \-> tvar 1))
@@ -149,6 +152,7 @@ inferenceTests = TestLabel "inference tests" $ TestList
                 [ (pcon "Just" [pvar "x"], var "f" \$ var "x")
                 , (pwild                 , var "mx")]) -- this restricts the generalization of f
         (scheme [1] (tmaybe (tvar 1) \-> (tvar 1 \-> tmaybe (tvar 1)) \-> tmaybe (tvar 1)))
+    , tInferExprWithPrelude "string cons" (con "Cons" \$ char 'a' \$ string "bcd") (TMono tstring)
     ]
 
 tests = TestList
