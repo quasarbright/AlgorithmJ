@@ -216,10 +216,19 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferExprWithPrelude "map ignore"
         (var "map" \$ (var "const" \$ unit))
         (scheme [1] $ tlist (tvar 1) \-> tlist tunit)
+    , tInferExprWithPrelude "prelude append"
+        (var "append")
+        (scheme [1] $ tlist (tvar 1) \-> tlist (tvar 1) \-> tlist (tvar 1))
+    , tInferExprWithPrelude "append 1s mutual recursion"
+        (letrec
+            [ fbind "appendOnes" [pvar "xs"] (var "append" \$ var "xs" \$ var "ones")
+            , vbind "ones" (var "append" \$ elist [int 1] \$ (var "appendOnes" \$ var "ones"))
+            ]
+        (tup [var "ones", var "appendOnes"]))
+        (TMono $ ttup [tlist tint, tlist tint \-> tlist tint])
     ]
     {-
     TODO test shadowing
-    TODO test function and non-function bindings in the same letrec
     -}
     -- why does pattern matching need generalize, but let needs finalize?
 
