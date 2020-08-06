@@ -34,6 +34,10 @@ prelude = Program decls unit ()
                 (ecase (var "xs")
                     [(pcon "Cons" [pvar "x", pvar "xs"], (var "x" \: (var "append" \$ var "xs" \$ var "xs'"))),
                      (pcon "Empty" [], var "xs'")])]
+            , declGroup [fbind "concat" [pvar "lists"]
+                (ecase (var "lists")
+                    [(pcon "Cons" [pvar "xs", pvar "lists"], var "append" \$ var "xs" \$ (var "concat" \$ var "lists")),
+                     (pcon "Empty" [], elist [])])]
             ]
 
 -- | prepend the first program's decls to the second program. Ghetto importing

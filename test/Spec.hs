@@ -226,6 +226,9 @@ inferenceTests = TestLabel "inference tests" $ TestList
             ]
         (tup [var "ones", var "appendOnes"]))
         (TMono $ ttup [tlist tint, tlist tint \-> tlist tint])
+    , tInferExprWithPrelude "prelude concat"
+        (var "concat")
+        (scheme [1] $ tlist (tlist (tvar 1)) \-> tlist (tvar 1))
     ]
     {-
     TODO test shadowing
