@@ -94,6 +94,7 @@ infixr 3 \.
 x \. e = Lam (pvar x) e ()
 
 -- | lambda with an arbitrary pattern argument
+infixr 3 `elamp`
 elamp :: Pattern () -> Expr () -> Expr ()
 elamp p body = Lam p body ()
 

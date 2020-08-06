@@ -155,8 +155,6 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferExprWithPrelude "string cons" (con "Cons" \$ char 'a' \$ string "bcd") (TMono tstring)
     , tInfer "fst with pattern lambda" (elamp (ptup [pvar "x", pwild]) (var "x")) (scheme [1,2] (ttup [tvar 1, tvar 2] \-> tvar 1))
     , tInfer "snd with pattern lambda" (elamp (ptup [pwild, pvar "x"]) (var "x")) (scheme [1,2] (ttup [tvar 1, tvar 2] \-> tvar 2))
-
-    -- why does pattern matching need generalize, but let needs finalize?
     , tInferExprWithPrelude "poly id on rhs of match"
         (ecase (var "id") [(pvar "f", var "f" \$ var "f" \$ unit)])
         (TMono tunit)
@@ -167,12 +165,25 @@ inferenceTests = TestLabel "inference tests" $ TestList
         (("f" \. var "f" \$ var "f" \$ unit) \$ var "id")
         (OccursError (MkTVName 9) (tvar 9 \-> tvar 10))
     , tInferErrorWithPrelude "variable different types in or pattern"
-        (ecase (elist [int 1, int 2, int 3]) [(pcon "Cons" [pvar "x" |\)])
-
-     -- mixed list fails
-     -- [int -> int, a -> a
+        (ecase (elist [int 1, int 2, int 3]) [(pcon "Cons" [pvar "x",pwild] \| pcon "Cons" [pwild, pvar "x"], var "x")])
+        (Mismatch tint (tlist tint))
+    , tInferErrorWithPrelude "mixed list fails" (elist [int 1, unit, char 'c']) (Mismatch tunit tchar)
+    , tInferExprWithPrelude "[int -> int, a -> a]" (elist ["x"\.var"x"\::tint\->tint, "x"\.var"x"]) (TMono $ tlist (tint \-> tint))
+    , tInferExprWithPrelude "[a -> a, int -> int]" (elist ["x"\.var"x", "x"\.var"x"\::tint\->tint]) (TMono $ tlist (tint \-> tint))
+    , tInferExprWithPrelude "list head with pattern lambda"
+        (pcon "Cons" [pvar "x",pwild] `elamp` var "x")
+        (scheme [1] $ tlist (tvar 1) \-> tvar 1)
+    , tInferExprWithPrelude "list tail with pattern lambda"
+        (pcon "Cons" [pwild,pvar "xs"] `elamp` var "xs")
+        (scheme [1] $ tlist (tvar 1) \-> tlist (tvar 1))
+    , tInferExprWithPrelude "list id with pattern lambda"
+        (pcon "Cons" [pvar "x",pvar "xs"] `elamp` con "Cons" \$ var "x" \$ var "xs")
+        (scheme [1] $ tlist (tvar 1) \-> tlist (tvar 1))
+    , tInferExprWithPrelude "match list but return unit"
+        (pcon "Cons" [pvar "x", pvar "xs"] `elamp` unit)
+        (scheme [1] $ tlist (tvar 1) \-> tunit)
     ]
-
+    -- why does pattern matching need generalize, but let needs finalize?
 tests = TestList
     [ tpass
     , ufTests
