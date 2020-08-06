@@ -194,9 +194,29 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferError "y combinator with lef fun"
         (eletf "y" [pvar "f"] (("x"\. var "f" \$ (var "x" \$ var "x")) \$ ("x"\. var "f" \$ (var "x" \$ var "x"))) (var "y"))
         (OccursError (MkTVName 2) (tvar 2 \-> tvar 3))
+    , tInferExprWithPrelude "list map"
+        (letrec [fbind "map" [pvar "f", pvar "xs"]
+            (ecase (var "xs")
+                [(pcon "Cons" [pvar "x", pvar "xs"], (var "f" \$ var "x") \: (var "map" \$ var "f" \$ var "xs")),
+                 (pcon "Empty" []                  , elist [])])]
+        (var "map"))
+        (scheme [1,2] $ (tvar 1 \-> tvar 2) \-> tlist (tvar 1) \-> tlist (tvar 2))
+    , tInferExprWithPrelude "[1,1,1,1,...]"
+        (letrec [vbind "xs" (int 1\:var "xs")] (var "xs"))
+        (TMono $ tlist tint)
+    , tInferExprWithPrelude "[1,2,1,2,...] via multi letrec"
+        (letrec [vbind "ones" (int 1\:var "twos"), vbind "twos" (int 2\:var "ones")] (var "ones"))
+        (TMono $ tlist tint)
+    , tInferExprWithPrelude "skip every other element via multi letrec"
+        (letrec [ fbind "skipSecond" [pcon "Cons" [pvar "x", pvar "xs"]] (var "x"\:(var "skipFirst" \$ var "xs"))
+                , fbind "skipFirst"  [pcon "Cons" [pwild,    pvar "xs"]] (var "skipSecond" \$ var "xs")
+                ]
+        (var "skipFirst"))
+        (scheme [1] $ tlist (tvar 1) \-> tlist (tvar 1))
     ]
     {-
     TODO test shadowing
+    TODO test function and non-function bindings in the same letrec 
     -}
     -- why does pattern matching need generalize, but let needs finalize?
 

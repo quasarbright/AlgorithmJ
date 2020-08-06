@@ -10,6 +10,7 @@ TODO I'm worried about users annotating with a tvar that's in scope and messing 
 TODO multi function binding like haskell
         f [] = []
         f (x:xs) = x:xs
+TODO put list map in prelude
 -}
 
 module Static.Inference where
@@ -31,6 +32,7 @@ import qualified Data.Set as Set
 import Static.Errors
 
 data Reason a = Inferring (Expr a)
+            -- TODO checking pattern
             | Unifying MonoType MonoType
             deriving(Eq, Ord, Show)
 
@@ -253,6 +255,9 @@ infer e = localReason (Inferring e) $
         Let b body _ -> do
             annots <- processBinding b
             localVarAnnots annots $ infer body
+        LetRec bindings body _ -> do
+            annots <- processRecBindings bindings
+            localVarAnnots annots $ infer body
         Tup es _ -> TTup <$> mapM infer es
         Annot e' t _ -> check e' t >> return t
         Case e' ms _ -> do
@@ -316,8 +321,9 @@ checkPattern pattern t = do
 checkPatternAndGeneralize :: (MonoType -> TypeChecker a Type) -> Pattern a -> MonoType -> TypeChecker a [(VName, Type)]
 checkPatternAndGeneralize generalizer pat t = do
     newVarAnnots <- Map.toList <$> checkPattern pat t
-    generalizedTypes <- mapM (generalizer . snd) newVarAnnots --(trace ("newVarAnnots: "++show newVarAnnots++"\ncontext: "++show ctx) newVarAnnots)
-    return $ zip (fst <$> newVarAnnots) generalizedTypes
+    let (names, monoTypes) = unzip newVarAnnots
+    generalizedTypes <- mapM generalizer monoTypes --(trace ("newVarAnnots: "++show newVarAnnots++"\ncontext: "++show ctx) newVarAnnots)
+    return $ zip names generalizedTypes
 
 -- | abstraction for when the variables of a binding are only used in a single expression.
 -- Like @let p = e in body@ or @case e of ... | p -> body | ...@.
@@ -337,6 +343,31 @@ processBinding (FunctionBinding f pats mRetType functionBody _) = do
     functionType <- inferFunction pats mRetType functionBody
     functionType' <- finalizeMonoType functionType
     return [(f, functionType')]
+
+processRecBindings :: [Binding a] -> TypeChecker a [(VName, Type)]
+processRecBindings bindings = do
+    types <- freshMonoTypes (length bindings)
+    let patterns = patternOfBinding <$> bindings
+            where
+                patternOfBinding (FunctionBinding f _ _ _ tag) = PVar f tag
+                patternOfBinding (PatternBinding p _ _) = p
+    rhsAnnots_ <- zipWithM checkPattern patterns types
+    let rhsAnnots = Map.toList . Map.unions $ rhsAnnots_
+    let (names, monoTypes) = unzip rhsAnnots
+    let monoTypesAsTypes = TMono <$> monoTypes
+    let go binding t = localVarAnnots (zip names monoTypesAsTypes) $ checkBodyOfRecBinding binding t
+    zipWithM_ go bindings types
+    generalizedMonoTypes <- mapM finalizeMonoType monoTypes
+    return $ zip names generalizedMonoTypes
+
+-- | helper for processRecBindings.
+-- Expects all necessary annotations to be present in the context. Checks the rhs of the binding against the given type.
+-- Handles the function case.
+checkBodyOfRecBinding :: Binding a -> MonoType -> TypeChecker a ()
+checkBodyOfRecBinding (FunctionBinding _ pats mRetType functionBody _) t = do
+    functionType <- inferFunction pats mRetType functionBody
+    unify t functionType
+checkBodyOfRecBinding (PatternBinding _ value _) t = check value t
 
 -- | Infer a type for a function with the given argument patterns, optional return type, and function body
 inferFunction :: [Pattern a] -> Maybe MonoType -> Expr a -> TypeChecker a MonoType
@@ -370,6 +401,9 @@ processDecl d = case d of
                         arrType = foldr TArr (TCon typeName (TVar <$> params)) args
     BindingDecl binding _ -> do
         annots <- processBinding binding
+        modifyContext $ addVarAnnots annots
+    BindingDeclGroup bindings _ -> do
+        annots <- processRecBindings bindings
         modifyContext $ addVarAnnots annots
 
 -- | Infer the type of the given literal

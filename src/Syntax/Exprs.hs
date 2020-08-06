@@ -17,6 +17,8 @@ data Expr a = Var VName a
           | App (Expr a) (Expr a) a
           -- let binding
           | Let (Binding a) (Expr a) a
+          -- (mutually) recursive let binding(s)
+          | LetRec [Binding a] (Expr a) a
           -- tuple
           | Tup [Expr a] a
           -- annotated expression
@@ -32,6 +34,7 @@ instance Show (Expr a) where
                 Lam{} -> 3
                 App{} -> 9
                 Let{} -> 3
+                LetRec{} -> 3
                 Tup{} -> 10
                 Con{} -> 10
                 Annot{} -> 1
@@ -43,6 +46,7 @@ instance Show (Expr a) where
             Lam name body _ -> showParen (p > p') $ showString "\\" . shows name . showString "." . showsPrec p' body
             App f x _ -> showParen (p > p') $ showsPrec p' f . showString " " . showsPrec (p' + 1) x
             Let binding body _ -> showParen (p > p') $ showString "let " . shows binding . showString " in " . shows body
+            LetRec bindings body _ -> showParen (p > p') $ showString "let rec" . showString (intercalate " and " (show <$> bindings)) . showString " in " . shows body
             Tup es _ -> showParen True $ showString (intercalate ", " (show <$> es))
             Annot e' t _ -> showParen (p > p') $ showsPrec p' e' . showString " :: " . shows t
             Case e' ms _ -> showParen (p > p') $ showString "case " . shows e' . showString " of | " . showString (intercalate " | " msStrs)
@@ -81,6 +85,9 @@ eletp p value body = Let (PatternBinding p value ()) body ()
 eletf :: String -> [Pattern ()] -> Expr () -> Expr() -> Expr ()
 eletf f args functionBody letBody = Let (FunctionBinding (MkVName f) args Nothing functionBody ()) letBody ()
 
+letrec :: [Binding ()] -> Expr () -> Expr ()
+letrec bindings body = LetRec bindings body ()
+
 tup :: [Expr ()] -> Expr ()
 tup es = Tup es ()
 
@@ -117,6 +124,10 @@ efalse = con "False"
 elist :: Foldable t => t (Expr ()) -> Expr ()
 elist = foldr (\ a b -> con "Cons" \$ a \$ b) (con "Empty")
 
+infixr 5 \:
+(\:) :: Expr () -> Expr () -> Expr ()
+x \: xs = con "Cons" \$ x \$ xs
+
 ejust :: Expr () -> Expr ()
 ejust = (con "Just" \$)
 
@@ -142,3 +153,14 @@ instance Show (Binding a) where
         PatternBinding pat value _ -> unwords [show pat,"=",show value]
         FunctionBinding name patterns Nothing body _ -> unwords [show name,unwords (show <$> patterns),"=",show body]
         FunctionBinding name patterns (Just t) body _ -> unwords [show name,unwords (show <$> patterns),"::",show t,"=",show body]
+
+-- combinators for constructing bindings
+
+vbind :: String -> Expr () -> Binding ()
+vbind name value = PatternBinding (pvar name) value ()
+
+pbind :: Pattern () -> Expr () -> Binding ()
+pbind p value = PatternBinding p value ()
+
+fbind :: String -> [Pattern ()] -> Expr () -> Binding ()
+fbind f args value = FunctionBinding (MkVName f) args Nothing value ()

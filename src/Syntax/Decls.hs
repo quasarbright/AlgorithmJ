@@ -17,12 +17,16 @@ data Decl a =
     | BindingDecl
         (Binding a)
         a
+    | BindingDeclGroup -- mutually recursive
+        [Binding a]
+        a
     deriving(Eq, Ord)
 
 instance Show (Decl a) where
     show d = case d of
         DataDecl name params conDecls _ -> concat["data ",show name," ",unwords (show <$> params)," = ",intercalate " | " (show <$> conDecls)]
-        BindingDecl binding _ -> show binding
+        BindingDecl binding _ -> "let "++show binding
+        BindingDeclGroup bindings _ -> "let rec "++intercalate " and " (show <$> bindings)
 
 -- | value constructor declaration. describes a product type
 data ConDecl a = ConDecl CName [MonoType] a deriving(Eq, Ord)
