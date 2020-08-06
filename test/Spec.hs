@@ -153,6 +153,24 @@ inferenceTests = TestLabel "inference tests" $ TestList
                 , (pwild                 , var "mx")]) -- this restricts the generalization of f
         (scheme [1] (tmaybe (tvar 1) \-> (tvar 1 \-> tmaybe (tvar 1)) \-> tmaybe (tvar 1)))
     , tInferExprWithPrelude "string cons" (con "Cons" \$ char 'a' \$ string "bcd") (TMono tstring)
+    , tInfer "fst with pattern lambda" (elamp (ptup [pvar "x", pwild]) (var "x")) (scheme [1,2] (ttup [tvar 1, tvar 2] \-> tvar 1))
+    , tInfer "snd with pattern lambda" (elamp (ptup [pwild, pvar "x"]) (var "x")) (scheme [1,2] (ttup [tvar 1, tvar 2] \-> tvar 2))
+
+    -- why does pattern matching need generalize, but let needs finalize?
+    , tInferExprWithPrelude "poly id on rhs of match"
+        (ecase (var "id") [(pvar "f", var "f" \$ var "f" \$ unit)])
+        (TMono tunit)
+    , tInferExprWithPrelude "poly id with let"
+        (elet "id" ("x" \. var "x") (var "id" \$ var "id" \$ unit))
+        (TMono tunit)
+    , tInferErrorWithPrelude "poly id in lambda fails"
+        (("f" \. var "f" \$ var "f" \$ unit) \$ var "id")
+        (OccursError (MkTVName 9) (tvar 9 \-> tvar 10))
+    , tInferErrorWithPrelude "variable different types in or pattern"
+        (ecase (elist [int 1, int 2, int 3]) [(pcon "Cons" [pvar "x" |\)])
+
+     -- mixed list fails
+     -- [int -> int, a -> a
     ]
 
 tests = TestList

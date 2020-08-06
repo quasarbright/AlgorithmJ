@@ -242,19 +242,21 @@ infer e = localReason (Inferring e) $
             retType <- freshMonoType
             unify fType (TArr xType retType)
             return retType
-        Lam x body _ -> do
+        Lam pat body _ -> do
             argType <- freshMonoType
-            retType <- localVarAnnot x (TMono argType) $ infer body
+--            let body' = Case (Var (MkVName "$ARG$") tag) [(pat, body)] tag
+--            retType <- localVarAnnot (MkVName "$ARG$") (TMono argType) $ infer body
+--            retType <- localVarAnnot x (TMono argType) $ infer body
+            retType <- processBindingWithBody (return . TMono) pat argType body
             return $ TArr argType retType
-        Let x value body _ -> do
+        Let pat value body _ -> do
             valueType <- infer value
-            valueType' <- finalizeMonoType valueType
-            localVarAnnot x valueType' $ infer body
+            processBindingWithBody finalizeMonoType pat valueType body
         Tup es _ -> TTup <$> mapM infer es
         Annot e' t _ -> check e' t >> return t
         Case e' ms _ -> do
             t <- infer e'
-            rhsTypes <- mapM (\ (pat, body) -> processBindingWithBody pat t body) ms
+            rhsTypes <- mapM (\ (pat, body) -> processBindingWithBody generalize pat t body) ms
             case rhsTypes of
                 [] -> throw EmptyCase
                 _ -> zipWithM_ unify rhsTypes (tail rhsTypes)
@@ -312,13 +314,13 @@ processBinding pattern t = do
 
 -- | abstraction for when the variables of a binding are only used in a single expression.
 -- Like @let p = e in body@ or @case e of ... | p -> body | ...@.
--- NOTE: do NOT use for lambdas because this generalizes all variables' types before checking the body, and lambda arguments
---   need to be mono types
-processBindingWithBody :: Pattern a -> MonoType -> Expr a -> TypeChecker a MonoType
-processBindingWithBody pat t body = do
+-- first parameter is a mono-type generalizer. Either finalizeMonoType, generalize, or (return . TMono).
+-- Use the latter for no generalization
+processBindingWithBody :: (MonoType -> TypeChecker a Type) -> Pattern a -> MonoType -> Expr a -> TypeChecker a MonoType
+processBindingWithBody generalizer pat t body = do
     newVarAnnots <- Map.toList <$> processBinding pat t
 --    ctx <- getContext <$> get
-    generalizedTypes <- mapM (generalize . snd) newVarAnnots --(trace ("newVarAnnots: "++show newVarAnnots++"\ncontext: "++show ctx) newVarAnnots)
+    generalizedTypes <- mapM (generalizer . snd) newVarAnnots --(trace ("newVarAnnots: "++show newVarAnnots++"\ncontext: "++show ctx) newVarAnnots)
     let generalizedVarAnnots = zip (fst <$> newVarAnnots) generalizedTypes
     localVarAnnots generalizedVarAnnots (infer body)
 

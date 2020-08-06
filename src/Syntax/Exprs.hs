@@ -9,9 +9,9 @@ import Syntax.Literals
 data Expr a = Var VName a
           | Con CName a
           | ELiteral (Literal a) a
-          | Lam VName (Expr a) a
+          | Lam (Pattern a) (Expr a) a
           | App (Expr a) (Expr a) a
-          | Let VName (Expr a) (Expr a) a
+          | Let (Pattern a) (Expr a) (Expr a) a
           | Tup [Expr a] a
           | Annot (Expr a) MonoType a
           | Case (Expr a) [(Pattern a, Expr a)] a
@@ -62,9 +62,15 @@ char c = ELiteral (LChar c ()) ()
 string :: String -> Expr ()
 string s = ELiteral (LString s ()) ()
 
+-- | let expression with simple variable binding
 elet :: String -> Expr () -> Expr () -> Expr ()
-elet name value body = Let (MkVName name) value body ()
+elet name value body = Let (pvar name) value body ()
 
+-- | let expression with pattern binding
+eletp :: Pattern () -> Expr () -> Expr () -> Expr ()
+eletp p value body = Let p value body ()
+
+-- |
 tup :: [Expr ()] -> Expr ()
 tup es = Tup es ()
 
@@ -82,9 +88,14 @@ infixl 9 \$
 (\$) :: Expr () -> Expr () -> Expr ()
 (\$) f x = App f x ()
 
+-- | lambda with a simple variable argument
 infixr 3 \.
 (\.) :: String -> Expr () -> Expr ()
-x \. e = Lam (MkVName x) e ()
+x \. e = Lam (pvar x) e ()
+
+-- | lambda with an arbitrary pattern argument
+elamp :: Pattern () -> Expr () -> Expr ()
+elamp p body = Lam p body ()
 
 etrue :: Expr ()
 etrue = con "True"
