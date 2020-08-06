@@ -2,6 +2,7 @@ module Syntax.Decls where
 
 import Syntax.Names
 import Syntax.Exprs
+import Syntax.Patterns
 import Syntax.Types
 import Data.List
 
@@ -14,7 +15,7 @@ data Decl a =
         [ConDecl a] -- union cases
         a -- tag
     | VarDecl
-        VName -- variable name
+        (Pattern a) -- variable name
         (Expr a) -- value
         a
     deriving(Eq, Ord)
@@ -39,4 +40,7 @@ conDecl :: String -> [MonoType] -> ConDecl ()
 conDecl name tys = ConDecl (MkCName name) tys ()
 
 varDecl :: String -> Expr () -> Decl ()
-varDecl name value = VarDecl (MkVName name) value ()
+varDecl name value = VarDecl (pvar name) value ()
+
+varDeclp :: Pattern () -> Expr () -> Decl ()
+varDeclp p value = VarDecl p value ()

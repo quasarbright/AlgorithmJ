@@ -34,6 +34,10 @@ emptyContext = []
 addVarAnnot :: VName -> Type -> Context a -> Context a
 addVarAnnot x t = (VarAnnot x t:)
 
+-- | add several variable annotations to the context
+addVarAnnots :: [(VName, Type)] -> Context a -> Context a
+addVarAnnots annots ctx = foldr (uncurry addVarAnnot) ctx annots
+
 -- | add a value constructor annotation to the context, creating a constructor name from the string
 addVarAnnotStr :: String -> Type -> Context a -> Context a
 addVarAnnotStr s = addVarAnnot (MkVName s)

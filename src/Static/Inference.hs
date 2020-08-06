@@ -1,13 +1,11 @@
 {-
 TODO investigate eagerness. now use finalize instead of generalize. pretty eager.
-TODO lets have pattern LHSs
 TODO let f x = ... sugar
 TODO let rec
 TODO let rec and
 TODO guards
 TODO type classes (HUGE)
 TODO type aliases
-TODO literals and primitive types
 TODO exceptions and top
 -}
 
@@ -312,16 +310,19 @@ processBinding pattern t = do
                 unify t' t
                 processBinding pat t'
 
+processBindingAndGeneralize :: (MonoType -> TypeChecker a Type) -> Pattern a -> MonoType -> TypeChecker a [(VName, Type)]
+processBindingAndGeneralize generalizer pat t = do
+    newVarAnnots <- Map.toList <$> processBinding pat t
+    generalizedTypes <- mapM (generalizer . snd) newVarAnnots --(trace ("newVarAnnots: "++show newVarAnnots++"\ncontext: "++show ctx) newVarAnnots)
+    return $ zip (fst <$> newVarAnnots) generalizedTypes
+
 -- | abstraction for when the variables of a binding are only used in a single expression.
 -- Like @let p = e in body@ or @case e of ... | p -> body | ...@.
 -- first parameter is a mono-type generalizer. Either finalizeMonoType, generalize, or (return . TMono).
 -- Use the latter for no generalization
 processBindingWithBody :: (MonoType -> TypeChecker a Type) -> Pattern a -> MonoType -> Expr a -> TypeChecker a MonoType
 processBindingWithBody generalizer pat t body = do
-    newVarAnnots <- Map.toList <$> processBinding pat t
---    ctx <- getContext <$> get
-    generalizedTypes <- mapM (generalizer . snd) newVarAnnots --(trace ("newVarAnnots: "++show newVarAnnots++"\ncontext: "++show ctx) newVarAnnots)
-    let generalizedVarAnnots = zip (fst <$> newVarAnnots) generalizedTypes
+    generalizedVarAnnots <- processBindingAndGeneralize generalizer pat t
     localVarAnnots generalizedVarAnnots (infer body)
 
 -- | Record the declaration in the program, adding its definitions to the context
@@ -342,12 +343,11 @@ processDecl d = case d of
                     where
                         -- A1 -> ... -> An -> D a b
                         arrType = foldr TArr (TCon typeName (TVar <$> params)) args
-    VarDecl name value _ -> do
-        -- TODO abstract with let when things get more complicated. maybe inferBinding :: Binding -> Map VName Type or something
+    VarDecl pat value _ -> do
         -- careful, should let (id1, id2) = (\x.x, \x.x) result in ids? YES
         valueType <- infer value
-        valueType' <- finalizeMonoType valueType
-        modifyContext $ addVarAnnot name valueType'
+        annots <- processBindingAndGeneralize finalizeMonoType pat valueType
+        modifyContext $ addVarAnnots annots
 
 -- | Infer the type of the given literal
 typeOfLiteral :: Literal a -> MonoType
