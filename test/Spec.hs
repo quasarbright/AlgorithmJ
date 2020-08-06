@@ -182,8 +182,24 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferExprWithPrelude "match list but return unit"
         (pcon "Cons" [pvar "x", pvar "xs"] `elamp` unit)
         (scheme [1] $ tlist (tvar 1) \-> tunit)
+    , tInferExprWithPrelude "let fst (x,_) = x in fst"
+        (eletf "fst" [ptup [pvar "x",pwild]] (var "x") (var "fst"))
+        (scheme [1,2] $ ttup [tvar 1, tvar 2] \-> tvar 1)
+    , tInferExprWithPrelude "let snd (_,x) = x in snd"
+        (eletf "snd" [ptup [pwild,pvar "x"]] (var "x") (var "snd"))
+        (scheme [1,2] $ ttup [tvar 1, tvar 2] \-> tvar 2)
+    , tInferError "loop with let fun"
+        (eletf "loop" [pvar "x"] (var "x" \$ var "x") (var "loop"))
+        (OccursError (MkTVName 1) (tvar 1 \-> tvar 2))
+    , tInferError "y combinator with lef fun"
+        (eletf "y" [pvar "f"] (("x"\. var "f" \$ (var "x" \$ var "x")) \$ ("x"\. var "f" \$ (var "x" \$ var "x"))) (var "y"))
+        (OccursError (MkTVName 2) (tvar 2 \-> tvar 3))
     ]
+    {-
+    TODO test shadowing
+    -}
     -- why does pattern matching need generalize, but let needs finalize?
+
 tests = TestList
     [ tpass
     , ufTests

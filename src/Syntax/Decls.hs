@@ -14,16 +14,15 @@ data Decl a =
         [TVName] -- type parameter names. length = type constructor arity
         [ConDecl a] -- union cases
         a -- tag
-    | VarDecl
-        (Pattern a) -- variable name
-        (Expr a) -- value
+    | BindingDecl
+        (Binding a)
         a
     deriving(Eq, Ord)
 
 instance Show (Decl a) where
     show d = case d of
         DataDecl name params conDecls _ -> concat["data ",show name," ",unwords (show <$> params)," = ",intercalate " | " (show <$> conDecls)]
-        VarDecl name value _ -> concat[show name," = ",show value]
+        BindingDecl binding _ -> show binding
 
 -- | value constructor declaration. describes a product type
 data ConDecl a = ConDecl CName [MonoType] a deriving(Eq, Ord)
@@ -40,7 +39,13 @@ conDecl :: String -> [MonoType] -> ConDecl ()
 conDecl name tys = ConDecl (MkCName name) tys ()
 
 varDecl :: String -> Expr () -> Decl ()
-varDecl name value = VarDecl (pvar name) value ()
+varDecl name value = BindingDecl (PatternBinding (pvar name) value ()) ()
 
 varDeclp :: Pattern () -> Expr () -> Decl ()
-varDeclp p value = VarDecl p value ()
+varDeclp p value = BindingDecl (PatternBinding p value ()) ()
+
+patDecl :: Pattern () -> Expr () -> Decl ()
+patDecl p value = BindingDecl (PatternBinding p value ()) ()
+
+funDecl :: String -> [Pattern ()] -> Expr () -> Decl ()
+funDecl f args body = BindingDecl (FunctionBinding (MkVName f) args Nothing body ()) ()

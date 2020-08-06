@@ -1,12 +1,16 @@
 {-
 TODO investigate eagerness. now use finalize instead of generalize. pretty eager.
 TODO let f x = ... sugar
-TODO let rec
 TODO let rec and
 TODO guards
 TODO type classes (HUGE)
 TODO type aliases
 TODO exceptions and top
+TODO mutually recursive type definitions
+TODO I'm worried about users annotating with a tvar that's in scope and messing things up. Make fresh vars syntactically invalid
+TODO multi function binding like haskell
+        f [] = []
+        f (x:xs) = x:xs
 -}
 
 module Static.Inference where
@@ -245,16 +249,16 @@ infer e = localReason (Inferring e) $
 --            let body' = Case (Var (MkVName "$ARG$") tag) [(pat, body)] tag
 --            retType <- localVarAnnot (MkVName "$ARG$") (TMono argType) $ infer body
 --            retType <- localVarAnnot x (TMono argType) $ infer body
-            retType <- processBindingWithBody (return . TMono) pat argType body
+            retType <- checkPatternWithBody (return . TMono) pat argType body
             return $ TArr argType retType
-        Let pat value body _ -> do
-            valueType <- infer value
-            processBindingWithBody finalizeMonoType pat valueType body
+        Let b body _ -> do
+            annots <- processBinding b
+            localVarAnnots annots $ infer body
         Tup es _ -> TTup <$> mapM infer es
         Annot e' t _ -> check e' t >> return t
         Case e' ms _ -> do
             t <- infer e'
-            rhsTypes <- mapM (\ (pat, body) -> processBindingWithBody generalize pat t body) ms
+            rhsTypes <- mapM (\ (pat, body) -> checkPatternWithBody generalize pat t body) ms
             case rhsTypes of
                 [] -> throw EmptyCase
                 _ -> zipWithM_ unify rhsTypes (tail rhsTypes)
@@ -270,8 +274,8 @@ check e t = do
 -- | determines the mono types of variables when the given pattern is bound to an expression of the given type.
 -- For example, (x,y) = (1,id) will output {x:Int,y:(a -> a)} (not forall a . a -> a, just a -> a).
 -- NOTE: You must generalize the output variables after calling!
-processBinding :: Pattern a -> MonoType -> TypeChecker a (Map.Map VName MonoType)
-processBinding pattern t = do
+checkPattern :: Pattern a -> MonoType -> TypeChecker a (Map.Map VName MonoType)
+checkPattern pattern t = do
     case pattern of
             PVar name _ -> return $ Map.singleton name t
             PLiteral l _ -> unify (typeOfLiteral l) t >> return Map.empty
@@ -281,7 +285,7 @@ processBinding pattern t = do
                 let t' = ttup tvars
                 unify t' t
                 tvars' <- mapM find tvars -- necessary to prevent everything from being quantified in the end
-                Map.unions <$> zipWithM processBinding pats tvars'
+                Map.unions <$> zipWithM checkPattern pats tvars'
             PCon cName pats _ -> do
                 ctx <- getContext <$> get
                 (tName, params, types) <- case lookupConDef ctx cName of
@@ -296,10 +300,10 @@ processBinding pattern t = do
                 let types' = substituteManyMonoType replacements <$> types
                 -- recursively zip through the child patterns and the product type's subtypes
                 -- assume correct arity TODO wf
-                Map.unions <$> zipWithM processBinding pats types'
+                Map.unions <$> zipWithM checkPattern pats types'
             POr left right _ -> do
-                leftResult <- Map.toAscList <$>  processBinding left t
-                rightResult <- Map.toAscList <$> processBinding right t
+                leftResult <- Map.toAscList <$>  checkPattern left t
+                rightResult <- Map.toAscList <$> checkPattern right t
                 -- assume same domains TODO wf
                 zipWithM_ unify (snd <$> leftResult) (snd <$> rightResult)
                 finalRange <- mapM (find . snd) leftResult
@@ -308,11 +312,11 @@ processBinding pattern t = do
             PWild _ -> return (Map.empty)
             PAnnot pat t' _ -> do
                 unify t' t
-                processBinding pat t'
+                checkPattern pat t'
 
-processBindingAndGeneralize :: (MonoType -> TypeChecker a Type) -> Pattern a -> MonoType -> TypeChecker a [(VName, Type)]
-processBindingAndGeneralize generalizer pat t = do
-    newVarAnnots <- Map.toList <$> processBinding pat t
+checkPatternAndGeneralize :: (MonoType -> TypeChecker a Type) -> Pattern a -> MonoType -> TypeChecker a [(VName, Type)]
+checkPatternAndGeneralize generalizer pat t = do
+    newVarAnnots <- Map.toList <$> checkPattern pat t
     generalizedTypes <- mapM (generalizer . snd) newVarAnnots --(trace ("newVarAnnots: "++show newVarAnnots++"\ncontext: "++show ctx) newVarAnnots)
     return $ zip (fst <$> newVarAnnots) generalizedTypes
 
@@ -320,10 +324,32 @@ processBindingAndGeneralize generalizer pat t = do
 -- Like @let p = e in body@ or @case e of ... | p -> body | ...@.
 -- first parameter is a mono-type generalizer. Either finalizeMonoType, generalize, or (return . TMono).
 -- Use the latter for no generalization
-processBindingWithBody :: (MonoType -> TypeChecker a Type) -> Pattern a -> MonoType -> Expr a -> TypeChecker a MonoType
-processBindingWithBody generalizer pat t body = do
-    generalizedVarAnnots <- processBindingAndGeneralize generalizer pat t
+checkPatternWithBody :: (MonoType -> TypeChecker a Type) -> Pattern a -> MonoType -> Expr a -> TypeChecker a MonoType
+checkPatternWithBody generalizer pat t body = do
+    generalizedVarAnnots <- checkPatternAndGeneralize generalizer pat t
     localVarAnnots generalizedVarAnnots (infer body)
+
+-- | Return the variable annotations to add to the context from the given binding
+processBinding :: Binding a -> TypeChecker a [(VName, Type)]
+processBinding (PatternBinding pat value _) = do
+    valueType <- infer value
+    checkPatternAndGeneralize finalizeMonoType pat valueType
+processBinding (FunctionBinding f pats mRetType functionBody _) = do
+    functionType <- inferFunction pats mRetType functionBody
+    functionType' <- finalizeMonoType functionType
+    return [(f, functionType')]
+
+-- | Infer a type for a function with the given argument patterns, optional return type, and function body
+inferFunction :: [Pattern a] -> Maybe MonoType -> Expr a -> TypeChecker a MonoType
+inferFunction pats mRetType functionBody = do
+    argTypes <- freshMonoTypes (length pats)
+    annots_ <- zipWithM (checkPatternAndGeneralize (return . TMono)) pats argTypes
+    let annots = concat annots_
+    functionBodyType <- localVarAnnots annots $ infer functionBody
+    retType <- case mRetType of
+       Nothing -> return functionBodyType
+       Just retType -> unify retType functionBodyType >> return retType
+    return $ foldr TArr retType argTypes
 
 -- | Record the declaration in the program, adding its definitions to the context
 processDecl :: Eq a => Decl a -> TypeChecker a ()
@@ -343,10 +369,8 @@ processDecl d = case d of
                     where
                         -- A1 -> ... -> An -> D a b
                         arrType = foldr TArr (TCon typeName (TVar <$> params)) args
-    VarDecl pat value _ -> do
-        -- careful, should let (id1, id2) = (\x.x, \x.x) result in ids? YES
-        valueType <- infer value
-        annots <- processBindingAndGeneralize finalizeMonoType pat valueType
+    BindingDecl binding _ -> do
+        annots <- processBinding binding
         modifyContext $ addVarAnnots annots
 
 -- | Infer the type of the given literal

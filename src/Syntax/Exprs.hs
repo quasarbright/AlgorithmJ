@@ -7,12 +7,19 @@ import Syntax.Patterns
 import Syntax.Literals
 
 data Expr a = Var VName a
+          -- value constructor. like "Cons"
           | Con CName a
+          -- literal. like "1" or "'c'" or "1.9"
           | ELiteral (Literal a) a
+          -- lambda expression
           | Lam (Pattern a) (Expr a) a
+          -- function application
           | App (Expr a) (Expr a) a
-          | Let (Pattern a) (Expr a) (Expr a) a
+          -- let binding
+          | Let (Binding a) (Expr a) a
+          -- tuple
           | Tup [Expr a] a
+          -- annotated expression
           | Annot (Expr a) MonoType a
           | Case (Expr a) [(Pattern a, Expr a)] a
           deriving(Eq, Ord)
@@ -35,7 +42,7 @@ instance Show (Expr a) where
             ELiteral l _ -> shows l
             Lam name body _ -> showParen (p > p') $ showString "\\" . shows name . showString "." . showsPrec p' body
             App f x _ -> showParen (p > p') $ showsPrec p' f . showString " " . showsPrec (p' + 1) x
-            Let x value body _ -> showParen (p > p') $ showString "let " . shows x . showString " = " . shows value . showString " in " . shows body
+            Let binding body _ -> showParen (p > p') $ showString "let " . shows binding . showString " in " . shows body
             Tup es _ -> showParen True $ showString (intercalate ", " (show <$> es))
             Annot e' t _ -> showParen (p > p') $ showsPrec p' e' . showString " :: " . shows t
             Case e' ms _ -> showParen (p > p') $ showString "case " . shows e' . showString " of | " . showString (intercalate " | " msStrs)
@@ -64,13 +71,16 @@ string s = ELiteral (LString s ()) ()
 
 -- | let expression with simple variable binding
 elet :: String -> Expr () -> Expr () -> Expr ()
-elet name value body = Let (pvar name) value body ()
+elet name value body = Let (PatternBinding (pvar name) value ()) body ()
 
 -- | let expression with pattern binding
 eletp :: Pattern () -> Expr () -> Expr () -> Expr ()
-eletp p value body = Let p value body ()
+eletp p value body = Let (PatternBinding p value ()) body ()
 
--- |
+-- | let expression for defining a function (potentially multi-argument)
+eletf :: String -> [Pattern ()] -> Expr () -> Expr() -> Expr ()
+eletf f args functionBody letBody = Let (FunctionBinding (MkVName f) args Nothing functionBody ()) letBody ()
+
 tup :: [Expr ()] -> Expr ()
 tup es = Tup es ()
 
@@ -118,3 +128,17 @@ eleft = (con "Left" \$)
 
 eright :: Expr () -> Expr ()
 eright = (con "Right" \$)
+
+
+
+
+
+data Binding a = PatternBinding (Pattern a) (Expr a) a
+               | FunctionBinding VName [Pattern a] (Maybe MonoType) (Expr a) a
+               deriving(Eq, Ord)
+
+instance Show (Binding a) where
+    show b = case b of
+        PatternBinding pat value _ -> unwords [show pat,"=",show value]
+        FunctionBinding name patterns Nothing body _ -> unwords [show name,unwords (show <$> patterns),"=",show body]
+        FunctionBinding name patterns (Just t) body _ -> unwords [show name,unwords (show <$> patterns),"::",show t,"=",show body]

@@ -3,6 +3,7 @@ module Syntax.Program where
 import Syntax.Decls
 import Syntax.Exprs
 import Syntax.Types
+import Syntax.Patterns
 import Data.List
 
 data Program a = Program [Decl a] (Expr a) a deriving(Eq, Ord)
@@ -19,9 +20,12 @@ prelude = Program decls unit ()
             , dataDecl "List" [1] [conDecl "Empty" [], conDecl "Cons" [tvar 1, tcon "List" [tvar 1]]]
             , dataDecl "Maybe" [1] [conDecl "Nothing" [], conDecl "Just" [tvar 1]]
             , dataDecl "Either" [1,2] [conDecl "Left" [tvar 1], conDecl "Right" [tvar 2]]
-            , varDecl "id" ("x" \. var "x")
-            , varDecl "const" ("x" \. "y" \. var "x")
-            , varDecl "compose" ("f" \. "g" \. "x" \. var "f" \$ (var "g" \$ var "x"))
+--            , varDecl "id" ("x" \. var "x")
+--            , varDecl "const" ("x" \. "y" \. var "x")
+--            , varDecl "compose" ("f" \. "g" \. "x" \. var "f" \$ (var "g" \$ var "x"))
+            , funDecl "id" [pvar "x"] (var "x")
+            , funDecl "const" [pvar "x", pwild] (var "x")
+            , funDecl "compose" [pvar "f", pvar "g", pvar "x"] (var "f" \$ (var "g" \$ var "x"))
             ]
 
 -- | prepend the first program's decls to the second program. Ghetto importing
