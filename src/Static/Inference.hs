@@ -1,6 +1,5 @@
 {-
-TODO investigate eagerness. now use finalize instead of generalize. pretty eager.
-TODO let f x = ... sugar
+TODO investigate eagerness. now use finalize instead of generalize except for cases. pretty eager.
 TODO let rec and
 TODO guards
 TODO type classes (HUGE)
