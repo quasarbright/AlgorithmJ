@@ -9,7 +9,6 @@ TODO I'm worried about users annotating with a tvar that's in scope and messing 
 TODO multi function binding like haskell
         f [] = []
         f (x:xs) = x:xs
-TODO fun x y -> z 
 -}
 
 module Static.Inference where
@@ -244,13 +243,7 @@ infer e = localReason (Inferring e) $
             retType <- freshMonoType
             unify fType (TArr xType retType)
             return retType
-        Lam pat body _ -> do
-            argType <- freshMonoType
---            let body' = Case (Var (MkVName "$ARG$") tag) [(pat, body)] tag
---            retType <- localVarAnnot (MkVName "$ARG$") (TMono argType) $ infer body
---            retType <- localVarAnnot x (TMono argType) $ infer body
-            retType <- checkPatternWithBody (return . TMono) pat argType body
-            return $ TArr argType retType
+        Fun pats body _ -> inferFunction pats Nothing body
         Let b body _ -> do
             annots <- processBinding b
             localVarAnnots annots $ infer body

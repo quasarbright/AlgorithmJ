@@ -229,6 +229,9 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferExprWithPrelude "prelude concat"
         (var "concat")
         (scheme [1] $ tlist (tlist (tvar 1)) \-> tlist (tvar 1))
+    , tInferExprWithPrelude "cons with multi function"
+        (fun [pvar "x", pvar "xs"] (var "x"\:var "xs"))
+        (scheme [1] $ tvar 1 \-> tlist (tvar 1) \-> tlist (tvar 1))
     ]
     {-
     TODO test shadowing

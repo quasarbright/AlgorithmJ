@@ -12,7 +12,7 @@ data Expr a = Var VName a
           -- literal. like "1" or "'c'" or "1.9"
           | ELiteral (Literal a) a
           -- lambda expression
-          | Lam (Pattern a) (Expr a) a
+          | Fun [Pattern a] (Expr a) a
           -- function application
           | App (Expr a) (Expr a) a
           -- let binding
@@ -31,7 +31,7 @@ instance Show (Expr a) where
         let p' = case e of
                 Var{} -> 10
                 ELiteral{} -> 10
-                Lam{} -> 3
+                Fun{} -> 3
                 App{} -> 9
                 Let{} -> 3
                 LetRec{} -> 3
@@ -43,7 +43,7 @@ instance Show (Expr a) where
             Var name _ -> shows name
             Con name _ -> shows name
             ELiteral l _ -> shows l
-            Lam name body _ -> showParen (p > p') $ showString "\\" . shows name . showString "." . showsPrec p' body
+            Fun pats body _ -> showParen (p > p') $ showString "fun" . showsArgPats pats . showString " -> " . showsPrec p' body
             App f x _ -> showParen (p > p') $ showsPrec p' f . showString " " . showsPrec (p' + 1) x
             Let binding body _ -> showParen (p > p') $ showString "let " . shows binding . showString " in " . shows body
             LetRec bindings body _ -> showParen (p > p') $ showString "let rec" . showString (intercalate " and " (show <$> bindings)) . showString " in " . shows body
@@ -108,12 +108,16 @@ infixl 9 \$
 -- | lambda with a simple variable argument
 infixr 3 \.
 (\.) :: String -> Expr () -> Expr ()
-x \. e = Lam (pvar x) e ()
+x \. e = Fun [pvar x] e ()
 
 -- | lambda with an arbitrary pattern argument
 infixr 3 `elamp`
 elamp :: Pattern () -> Expr () -> Expr ()
-elamp p body = Lam p body ()
+elamp p body = Fun [p] body ()
+
+-- | lambda with many pattern arguments
+fun :: [Pattern ()] -> Expr () -> Expr ()
+fun args body = Fun args body ()
 
 etrue :: Expr ()
 etrue = con "True"
@@ -148,11 +152,14 @@ data Binding a = PatternBinding (Pattern a) (Expr a) a
                | FunctionBinding VName [Pattern a] (Maybe MonoType) (Expr a) a
                deriving(Eq, Ord)
 
+showsArgPats :: (Foldable t, Functor t, Show a) => t a -> String -> String
+showsArgPats pats = foldr (\s ss -> showString " " . s . ss) (showString "") (showsPrec 10 <$> pats)
+
 instance Show (Binding a) where
     show b = case b of
         PatternBinding pat value _ -> unwords [show pat,"=",show value]
-        FunctionBinding name patterns Nothing body _ -> unwords [show name,unwords (show <$> patterns),"=",show body]
-        FunctionBinding name patterns (Just t) body _ -> unwords [show name,unwords (show <$> patterns),"::",show t,"=",show body]
+        FunctionBinding name patterns Nothing body _ -> unwords [show name,showsArgPats patterns "","=",show body]
+        FunctionBinding name patterns (Just t) body _ -> show name ++ unwords [showsArgPats patterns "","::",show t,"=",show body]
 
 -- combinators for constructing bindings
 
