@@ -8,6 +8,10 @@ infixl 1 |$>
 (|$>) :: Functor f => f a -> (a -> b) -> f b
 x |$> f = f <$> x
 
+repeatUntilIdempotent :: Eq t => (t -> t) -> t -> t
+repeatUntilIdempotent f x = if x == x' then x else repeatUntilIdempotent f x'
+    where x' = f x
+
 -- | wrapper type that changes the behavior of equality.
 -- All values of this type are equal (for Eq and Ord).
 -- Useful for tagging where expr equality is tag-independent

@@ -232,9 +232,37 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferExprWithPrelude "cons with multi function"
         (fun [pvar "x", pvar "xs"] (var "x"\:var "xs"))
         (scheme [1] $ tvar 1 \-> tlist (tvar 1) \-> tlist (tvar 1))
+    , tInferExprWithPrelude "multi function list map no annot"
+        (letrec [fbinds "map"
+            [ ([pvar "f", pcon "Cons" [pvar "x", pvar "xs"]], (var "f" \$ var "x") \: (var "map" \$ var "f" \$ var "xs"))
+            , ([pwild, pcon "Empty" []], elist [])
+            ]]
+        (var "map"))
+        (scheme [1,2] $ (tvar 1 \-> tvar 2) \-> tlist (tvar 1) \-> tlist (tvar 2))
+    , tInferExprWithPrelude "multi function list map with annot"
+        (letrec [fbindsAnnot "map" ((tvar 1 \-> tvar 2) \-> tlist (tvar 1) \-> tlist (tvar 2))
+            [ ([pvar "f", pcon "Cons" [pvar "x", pvar "xs"]], (var "f" \$ var "x") \: (var "map" \$ var "f" \$ var "xs"))
+            , ([pwild, pcon "Empty" []], elist [])
+            ]]
+        (var "map"))
+        (scheme [1,2] $ (tvar 1 \-> tvar 2) \-> tlist (tvar 1) \-> tlist (tvar 2))
+    , tInferExprWithPrelude "annotated pattern binding"
+        {-
+        let
+            xs :: [Int]
+            ys :: [-1]
+            (xs, ys, zs) = ([], [], [])
+        in (xs, ys, zs)
+        -}
+        (eletb (pbindAnnots
+            [("xs", tlist tint),("ys", tlist (tvar (-1)))]
+            (ptup [pvar "xs", pvar "ys", pvar "zs"]) (tup [elist [], elist [], elist []]))
+        (tup [var "xs", var "ys", var "zs"]))
+        (scheme [1,2] $ ttup [tlist tint, tlist (tvar 1), tlist (tvar 2)]) -- TODO make this a user type var and have it not simplify
     ]
     {-
     TODO test shadowing
+    TODO curry and uncurry and flip (in prelude)
     -}
     -- why does pattern matching need generalize, but let needs finalize?
 

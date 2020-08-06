@@ -75,15 +75,18 @@ string s = ELiteral (LString s ()) ()
 
 -- | let expression with simple variable binding
 elet :: String -> Expr () -> Expr () -> Expr ()
-elet name value body = Let (PatternBinding (pvar name) value ()) body ()
+elet name value body = Let (vbind name value) body ()
 
 -- | let expression with pattern binding
 eletp :: Pattern () -> Expr () -> Expr () -> Expr ()
-eletp p value body = Let (PatternBinding p value ()) body ()
+eletp p value body = Let (pbind p value) body ()
 
 -- | let expression for defining a function (potentially multi-argument)
 eletf :: String -> [Pattern ()] -> Expr () -> Expr() -> Expr ()
-eletf f args functionBody letBody = Let (FunctionBinding (MkVName f) args Nothing functionBody ()) letBody ()
+eletf f args functionBody letBody = Let (fbind f args functionBody) letBody ()
+
+eletb :: Binding () -> Expr () -> Expr ()
+eletb b body = Let b body ()
 
 letrec :: [Binding ()] -> Expr () -> Expr ()
 letrec bindings body = LetRec bindings body ()
@@ -148,26 +151,50 @@ eright = (con "Right" \$)
 
 
 
-data Binding a = PatternBinding (Pattern a) (Expr a) a
-               | FunctionBinding VName [Pattern a] (Maybe MonoType) (Expr a) a
+data Binding a = PatternBinding [(VName, MonoType)] (Pattern a) (Expr a) a
+               | FunctionBinding VName (Maybe MonoType) [([Pattern a], Expr a, a)] a
                deriving(Eq, Ord)
 
 showsArgPats :: (Foldable t, Functor t, Show a) => t a -> String -> String
 showsArgPats pats = foldr (\s ss -> showString " " . s . ss) (showString "") (showsPrec 10 <$> pats)
 
+showAnnot :: (Show a1, Show a2) => (a1, a2) -> String
+showAnnot (name, t) = unwords[show name, "::", show t]
+
 instance Show (Binding a) where
     show b = case b of
-        PatternBinding pat value _ -> unwords [show pat,"=",show value]
-        FunctionBinding name patterns Nothing body _ -> unwords [show name,showsArgPats patterns "","=",show body]
-        FunctionBinding name patterns (Just t) body _ -> show name ++ unwords [showsArgPats patterns "","::",show t,"=",show body]
+        PatternBinding annots pat value _ -> unwords [annotsStr, show pat,"=",show value]
+            where annotsStr = "("++intercalate ", " (showAnnot <$> annots)++")"
+        FunctionBinding name mAnnot cases _  -> annotStr ++ intercalate ", " (caseStr <$> cases)
+            where
+                annotStr = case mAnnot of
+                    Nothing -> ""
+                    Just t -> unwords[show name,"::",show t,", "]
+                caseStr (patterns, body, _) = unwords [show name,showsArgPats patterns "","=",show body]
+--        FunctionBinding name patterns (Just t) body _ -> show name ++ unwords [showsArgPats patterns "","::",show t,"=",show body]
 
 -- combinators for constructing bindings
 
 vbind :: String -> Expr () -> Binding ()
-vbind name value = PatternBinding (pvar name) value ()
+vbind name = pbind (pvar name)
 
 pbind :: Pattern () -> Expr () -> Binding ()
-pbind p value = PatternBinding p value ()
+pbind = pbindAnnots []
+
+pbindAnnots :: [(String, MonoType)] -> Pattern () -> Expr () -> Binding ()
+pbindAnnots annots p value = PatternBinding annots' p value ()
+    where
+        (names, types) = unzip annots
+        annots' = (MkVName <$> names) `zip` types
 
 fbind :: String -> [Pattern ()] -> Expr () -> Binding ()
-fbind f args value = FunctionBinding (MkVName f) args Nothing value ()
+fbind f args value = fbinds f [(args, value)]
+
+fbindAnnot :: String -> MonoType -> [Pattern ()] -> Expr () -> Binding ()
+fbindAnnot f t args value = fbindsAnnot f t [(args, value)]
+
+fbinds :: String -> [([Pattern ()], Expr ())] -> Binding ()
+fbinds f cases = FunctionBinding (MkVName f) Nothing [(p, value, ()) | (p, value) <- cases]  ()
+
+fbindsAnnot :: String -> MonoType -> [([Pattern ()], Expr ())] -> Binding ()
+fbindsAnnot f t cases = FunctionBinding (MkVName f) (Just t) [(p, value, ()) | (p, value) <- cases]  ()

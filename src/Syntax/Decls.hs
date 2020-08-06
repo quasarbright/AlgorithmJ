@@ -43,16 +43,13 @@ conDecl :: String -> [MonoType] -> ConDecl ()
 conDecl name tys = ConDecl (MkCName name) tys ()
 
 varDecl :: String -> Expr () -> Decl ()
-varDecl name value = BindingDecl (PatternBinding (pvar name) value ()) ()
-
-varDeclp :: Pattern () -> Expr () -> Decl ()
-varDeclp p value = BindingDecl (PatternBinding p value ()) ()
+varDecl name value = BindingDecl (vbind name value) ()
 
 patDecl :: Pattern () -> Expr () -> Decl ()
-patDecl p value = BindingDecl (PatternBinding p value ()) ()
+patDecl p value = BindingDecl (pbind p value) ()
 
 funDecl :: String -> [Pattern ()] -> Expr () -> Decl ()
-funDecl f args body = BindingDecl (FunctionBinding (MkVName f) args Nothing body ()) ()
+funDecl f args body = BindingDecl (fbind f args body) ()
 
 declGroup :: [Binding ()] -> Decl ()
 declGroup bindings = BindingDeclGroup bindings ()

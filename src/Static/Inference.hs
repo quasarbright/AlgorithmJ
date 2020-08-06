@@ -13,6 +13,7 @@ TODO multi function binding like haskell
 
 module Static.Inference where
 
+import Common
 import Syntax.Exprs
 import Syntax.Types
 import Syntax.Literals
@@ -310,12 +311,21 @@ checkPattern pattern t = do
                 unify t' t
                 checkPattern pat t'
 
-checkPatternAndGeneralize :: (MonoType -> TypeChecker a Type) -> Pattern a -> MonoType -> TypeChecker a [(VName, Type)]
-checkPatternAndGeneralize generalizer pat t = do
-    newVarAnnots <- Map.toList <$> checkPattern pat t
+checkPatternAndGeneralizeWithAnnots :: [(VName, MonoType)] -> (MonoType -> TypeChecker a Type) -> Pattern a -> MonoType -> TypeChecker a [(VName, Type)]
+checkPatternAndGeneralizeWithAnnots annots generalizer pat t = do
+    newVarAnnots_ <- checkPattern pat t
+    let annotsMap = Map.fromList annots
+    Map.intersectionWith unify annotsMap newVarAnnots_
+        |> Map.toList
+        |$> snd
+        |> sequence_
+    let newVarAnnots = Map.toList $ Map.unionWith const annotsMap newVarAnnots_
     let (names, monoTypes) = unzip newVarAnnots
     generalizedTypes <- mapM generalizer monoTypes --(trace ("newVarAnnots: "++show newVarAnnots++"\ncontext: "++show ctx) newVarAnnots)
     return $ zip names generalizedTypes
+
+checkPatternAndGeneralize :: (MonoType -> TypeChecker a Type) -> Pattern a -> MonoType -> TypeChecker a [(VName, Type)]
+checkPatternAndGeneralize = checkPatternAndGeneralizeWithAnnots []
 
 -- | abstraction for when the variables of a binding are only used in a single expression.
 -- Like @let p = e in body@ or @case e of ... | p -> body | ...@.
@@ -328,27 +338,36 @@ checkPatternWithBody generalizer pat t body = do
 
 -- | Return the variable annotations to add to the context from the given binding
 processBinding :: Binding a -> TypeChecker a [(VName, Type)]
-processBinding (PatternBinding pat value _) = do
+processBinding (PatternBinding annots pat value _) = do
+    -- assume all annots are actually bound in pattern TODO wf
     valueType <- infer value
-    checkPatternAndGeneralize finalizeMonoType pat valueType
-processBinding (FunctionBinding f pats mRetType functionBody _) = do
-    functionType <- inferFunction pats mRetType functionBody
+    checkPatternAndGeneralizeWithAnnots annots finalizeMonoType pat valueType
+processBinding (FunctionBinding f mFunType cases _) = do
+    let getCaseType (pats, functionBody, _) = inferFunction pats Nothing functionBody
+    functionTypes <- mapM getCaseType cases
+    -- assume cases nonempty TODO wf
+    zipWithM_ unify functionTypes (tail functionTypes)
+    let functionType_ = head functionTypes
+    functionType <- case mFunType of
+        Nothing -> return functionType_
+        Just funType -> unify funType functionType_ >> return funType
     functionType' <- finalizeMonoType functionType
     return [(f, functionType')]
+
 
 processRecBindings :: [Binding a] -> TypeChecker a [(VName, Type)]
 processRecBindings bindings = do
     types <- freshMonoTypes (length bindings)
     let patterns = patternOfBinding <$> bindings
             where
-                patternOfBinding (FunctionBinding f _ _ _ tag) = PVar f tag
-                patternOfBinding (PatternBinding p _ _) = p
+                patternOfBinding (FunctionBinding f _ _ tag) = PVar f tag
+                patternOfBinding (PatternBinding _ p _ _) = p
     rhsAnnots_ <- zipWithM checkPattern patterns types
     let rhsAnnots = Map.toList . Map.unions $ rhsAnnots_
     let (names, monoTypes) = unzip rhsAnnots
     let monoTypesAsTypes = TMono <$> monoTypes
-    let go binding t = localVarAnnots (zip names monoTypesAsTypes) $ checkBodyOfRecBinding binding t
-    zipWithM_ go bindings types
+    let typeBinding binding t = localVarAnnots (zip names monoTypesAsTypes) $ checkBodyOfRecBinding binding t
+    zipWithM_ typeBinding bindings types
     generalizedMonoTypes <- mapM finalizeMonoType monoTypes
     return $ zip names generalizedMonoTypes
 
@@ -356,10 +375,18 @@ processRecBindings bindings = do
 -- Expects all necessary annotations to be present in the context. Checks the rhs of the binding against the given type.
 -- Handles the function case.
 checkBodyOfRecBinding :: Binding a -> MonoType -> TypeChecker a ()
-checkBodyOfRecBinding (FunctionBinding _ pats mRetType functionBody _) t = do
-    functionType <- inferFunction pats mRetType functionBody
+checkBodyOfRecBinding (FunctionBinding _ mFunType cases _) t = do
+    -- TODO abstract
+    let getCaseType (pats, functionBody, _) = inferFunction pats Nothing functionBody
+    functionTypes <- mapM getCaseType cases
+    -- assume cases nonempty TODO wf
+    zipWithM_ unify functionTypes (tail functionTypes)
+    let functionType_ = head functionTypes
+    functionType <- case mFunType of
+        Nothing -> return functionType_
+        Just funType -> unify funType functionType_ >> return funType
     unify t functionType
-checkBodyOfRecBinding (PatternBinding _ value _) t = check value t
+checkBodyOfRecBinding (PatternBinding _ _ value _) t = check value t
 
 -- | Infer a type for a function with the given argument patterns, optional return type, and function body
 inferFunction :: [Pattern a] -> Maybe MonoType -> Expr a -> TypeChecker a MonoType
