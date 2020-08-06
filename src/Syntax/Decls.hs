@@ -53,3 +53,6 @@ patDecl p value = BindingDecl (PatternBinding p value ()) ()
 
 funDecl :: String -> [Pattern ()] -> Expr () -> Decl ()
 funDecl f args body = BindingDecl (FunctionBinding (MkVName f) args Nothing body ()) ()
+
+declGroup :: [Binding ()] -> Decl ()
+declGroup bindings = BindingDeclGroup bindings ()

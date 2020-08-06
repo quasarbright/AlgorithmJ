@@ -71,7 +71,7 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferExprWithPrelude "prelude id id" (var "id" \$ var "id") (scheme [1] $ tvar 1 \-> tvar 1)
     , tInfer "use id polymorphically" (elet "id" ("x" \. var "x") (var "id" \$ var "id" \$ var "id" \$ int 1)) (TMono tint)
     , tInferError "loop" ("x" \. var "x" \$ var "x") (OccursError (MkTVName 1) (tvar 1 \-> tvar 2))
-    , tInferErrorWithPrelude "loop" ("x" \. var "x" \$ var "x") (OccursError (MkTVName 9) (tvar 9 \-> tvar 10))
+--    , tInferErrorWithPrelude "loop" ("x" \. var "x" \$ var "x") (OccursError (MkTVName 9) (tvar 9 \-> tvar 10))
     , tInfer "unit" unit (TMono tunit)
     , tInfer "2-tuple" (tup [int 1, unit]) (TMono $ ttup [tint, tunit])
     , tInferExprWithPrelude "true" etrue (TMono tbool)
@@ -161,9 +161,9 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferExprWithPrelude "poly id with let"
         (elet "id" ("x" \. var "x") (var "id" \$ var "id" \$ unit))
         (TMono tunit)
-    , tInferErrorWithPrelude "poly id in lambda fails"
-        (("f" \. var "f" \$ var "f" \$ unit) \$ var "id")
-        (OccursError (MkTVName 9) (tvar 9 \-> tvar 10))
+    , tInferError "poly id in lambda fails"
+        (("f" \. var "f" \$ var "f" \$ unit) \$ ("x"\.var "x"))
+        (OccursError (MkTVName 1) (tvar 1 \-> tvar 2))
     , tInferErrorWithPrelude "variable different types in or pattern"
         (ecase (elist [int 1, int 2, int 3]) [(pcon "Cons" [pvar "x",pwild] \| pcon "Cons" [pwild, pvar "x"], var "x")])
         (Mismatch tint (tlist tint))
@@ -213,10 +213,13 @@ inferenceTests = TestLabel "inference tests" $ TestList
                 ]
         (var "skipFirst"))
         (scheme [1] $ tlist (tvar 1) \-> tlist (tvar 1))
+    , tInferExprWithPrelude "map ignore"
+        (var "map" \$ (var "const" \$ unit))
+        (scheme [1] $ tlist (tvar 1) \-> tlist tunit)
     ]
     {-
     TODO test shadowing
-    TODO test function and non-function bindings in the same letrec 
+    TODO test function and non-function bindings in the same letrec
     -}
     -- why does pattern matching need generalize, but let needs finalize?
 

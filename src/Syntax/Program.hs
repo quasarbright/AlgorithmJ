@@ -26,6 +26,10 @@ prelude = Program decls unit ()
             , funDecl "id" [pvar "x"] (var "x")
             , funDecl "const" [pvar "x", pwild] (var "x")
             , funDecl "compose" [pvar "f", pvar "g", pvar "x"] (var "f" \$ (var "g" \$ var "x"))
+            , declGroup [fbind "map" [pvar "f", pvar "xs"]
+                (ecase (var "xs")
+                    [(pcon "Cons" [pvar "x", pvar "xs"], (var "f" \$ var "x") \: (var "map" \$ var "f" \$ var "xs")),
+                     (pcon "Empty" []                  , elist [])])]
             ]
 
 -- | prepend the first program's decls to the second program. Ghetto importing

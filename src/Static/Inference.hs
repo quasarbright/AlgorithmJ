@@ -1,6 +1,5 @@
 {-
 TODO investigate eagerness. now use finalize instead of generalize except for cases. pretty eager.
-TODO let rec and
 TODO guards
 TODO type classes (HUGE)
 TODO type aliases
@@ -11,6 +10,7 @@ TODO multi function binding like haskell
         f [] = []
         f (x:xs) = x:xs
 TODO put list map in prelude
+TODO fun x y -> z 
 -}
 
 module Static.Inference where
