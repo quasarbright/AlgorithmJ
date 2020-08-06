@@ -9,7 +9,6 @@ TODO I'm worried about users annotating with a tvar that's in scope and messing 
 TODO multi function binding like haskell
         f [] = []
         f (x:xs) = x:xs
-TODO put list map in prelude
 TODO fun x y -> z 
 -}
 
