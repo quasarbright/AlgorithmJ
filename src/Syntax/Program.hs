@@ -32,7 +32,7 @@ prelude = Program decls unit ()
                      (pcon "Empty" []                  , elist [])])]
             , declGroup [fbind "append" [pvar "xs", pvar "xs'"]
                 (ecase (var "xs")
-                    [(pcon "Cons" [pvar "x", pvar "xs"], (var "x" \: (var "append" \$ var "xs" \$ var "xs'"))),
+                    [(pcon "Cons" [pvar "x", pvar "xs"], var "x" \: (var "append" \$ var "xs" \$ var "xs'")),
                      (pcon "Empty" [], var "xs'")])]
             , declGroup [fbind "concat" [pvar "lists"]
                 (ecase (var "lists")
@@ -46,9 +46,12 @@ appendPrograms (Program decls _ _) (Program decls' body tag) = Program (decls++d
 
 -- combinators for program construction
 
+prog :: [Decl ()] -> Expr () -> Program ()
+prog decls body = Program decls body ()
+
 -- | program with just an expression
 eProg :: Expr () -> Program ()
-eProg e = Program [] e ()
+eProg e = prog [] e
 
 -- | "ghetto import" prelude
 withPrelude :: Program () -> Program ()

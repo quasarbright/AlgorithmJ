@@ -7,6 +7,7 @@ import Static.Inference hiding(union, find)
 import qualified Data.Map as Map
 import Syntax.Names
 import Syntax.Program
+import Syntax.Decls
 import Syntax.Patterns
 import Static.Errors
 
@@ -51,6 +52,27 @@ tInferErrorWithPrelude name e err = teq name (Left err) actual
         actual = case runProgramInference (exprWithPrelude e) initialState of
             Left (err, _) -> Left err
             Right r -> Right r
+
+tInferProgram :: String -> Program () -> Type -> Test
+tInferProgram name p t = teq name (Right t) actual
+     where
+         actual = case runProgramInference p initialState of
+             Left err -> Left err
+             Right (t, _) -> Right t
+
+tInferProgramError :: String -> Program () -> StaticError -> Test
+tInferProgramError name p err = teq name (Left err) actual
+     where
+         actual = case runProgramInference p initialState of
+             Left (err, _) -> Left err
+             Right t -> Right t
+
+tInferProgramWithPrelude :: String -> Program () -> Type -> Test
+tInferProgramWithPrelude name p t = teq name (Right t) actual
+     where
+         actual = case runProgramInference (withPrelude p) initialState of
+             Left err -> Left err
+             Right (t, _) -> Right t
 
 inferenceTests = TestLabel "inference tests" $ TestList
     [ tpass
@@ -259,6 +281,20 @@ inferenceTests = TestLabel "inference tests" $ TestList
             (ptup [pvar "xs", pvar "ys", pvar "zs"]) (tup [elist [], elist [], elist []]))
         (tup [var "xs", var "ys", var "zs"]))
         (scheme [1,2] $ ttup [tlist tint, tlist (tvar 1), tlist (tvar 2)]) -- TODO make this a user type var and have it not simplify
+    , tInferProgram "mutually recursive data types"
+        (prog
+            [ dataDeclGroup [ ("Foo", [1], [conDecl "FEmpty" [], conDecl "Foo" [tcon "Bar" [tvar 1], tcon "Bar" [tunit]]])
+                            , ("Bar", [1], [conDecl "BEmpty" [], conDecl "Bar" [tvar 1, tcon "Foo" [tvar 1]]])
+                            ]]
+            (con "Foo" \$ (con "Bar" \$ int 1 \$ con "FEmpty") \$ (con "Bar" \$ unit \$ con "FEmpty")))
+        (TMono (tcon "Foo" [tint]))
+    , tInferProgramError "mutually recursive data types error"
+      (prog
+          [ dataDeclGroup [ ("Foo", [1], [conDecl "FEmpty" [], conDecl "Foo" [tcon "Bar" [tvar 1], tcon "Bar" [tunit]]])
+                          , ("Bar", [1], [conDecl "BEmpty" [], conDecl "Bar" [tvar 1, tcon "Foo" [tvar 1]]])
+                          ]]
+          (con "Foo" \$ (con "Bar" \$ int 1 \$ con "FEmpty") \$ (con "Bar" \$ char 'c' \$ con "FEmpty")))
+      (Mismatch tunit tchar)
     ]
     {-
     TODO test shadowing

@@ -20,13 +20,21 @@ data Decl a =
     | BindingDeclGroup -- mutually recursive
         [Binding a]
         a
+    | DataDeclGroup
+        [(TCName, [TVName], [ConDecl a], a)]
+        a
     deriving(Eq, Ord)
+
+showData :: (Show a1, Show a2, Show a3) => a1 -> [a2] -> [a3] -> [Char]
+showData name params conDecls = concat[show name," ",unwords (show <$> params)," = ",intercalate " | " (show <$> conDecls)]
 
 instance Show (Decl a) where
     show d = case d of
-        DataDecl name params conDecls _ -> concat["data ",show name," ",unwords (show <$> params)," = ",intercalate " | " (show <$> conDecls)]
+        DataDecl name params conDecls _ -> "data " ++ showData name params conDecls
         BindingDecl binding _ -> "let "++show binding
         BindingDeclGroup bindings _ -> "let rec "++intercalate " and " (show <$> bindings)
+        DataDeclGroup dataDefs _ -> "data " ++ intercalate " and " defStrs
+            where defStrs = [showData name params conDecls | (name, params, conDecls, _) <- dataDefs]
 
 -- | value constructor declaration. describes a product type
 data ConDecl a = ConDecl CName [MonoType] a deriving(Eq, Ord)
@@ -53,3 +61,6 @@ funDecl f args body = BindingDecl (fbind f args body) ()
 
 declGroup :: [Binding ()] -> Decl ()
 declGroup bindings = BindingDeclGroup bindings ()
+
+dataDeclGroup :: [(String, [Integer], [ConDecl ()])] -> Decl ()
+dataDeclGroup dataDecls = DataDeclGroup [(MkTCName name, MkTVName <$> params, conDecls, ()) | (name, params, conDecls) <- dataDecls] ()

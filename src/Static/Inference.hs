@@ -5,10 +5,8 @@ TODO type classes (HUGE)
 TODO type aliases
 TODO exceptions and top
 TODO mutually recursive type definitions
+TODO if
 TODO I'm worried about users annotating with a tvar that's in scope and messing things up. Make fresh vars syntactically invalid
-TODO multi function binding like haskell
-        f [] = []
-        f (x:xs) = x:xs
 -}
 
 module Static.Inference where
@@ -424,6 +422,9 @@ processDecl d = case d of
     BindingDeclGroup bindings _ -> do
         annots <- processRecBindings bindings
         modifyContext $ addVarAnnots annots
+    DataDeclGroup dataDecls _ -> do
+        let dataDecls' = [DataDecl name params cases tag | (name, params, cases, tag) <- dataDecls]
+        mapM_ processDecl dataDecls'
 
 -- | Infer the type of the given literal
 typeOfLiteral :: Literal a -> MonoType
