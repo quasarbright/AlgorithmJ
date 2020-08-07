@@ -19,3 +19,21 @@ instance Show TVName where show name = 't':show (getTVName name)
 newtype TCName = MkTCName{getTCName :: String} deriving(Eq, Ord)
 
 instance Show TCName where show = getTCName
+
+-- | infix operator function
+newtype VarOpName = MkVarOpName{getVarOpName :: String} deriving(Eq, Ord)
+
+instance Show VarOpName where show = getVarOpName
+
+-- | infix constructor operator
+newtype ConOpName = MkConOpName{getConOpName :: String} deriving(Eq, Ord)
+
+instance Show ConOpName where show = getConOpName
+
+-- | operator associativity
+data Assoc = LAssoc | RAssoc | NonAssoc deriving(Eq, Ord, Show)
+
+-- | operator associativity and precedence
+data Fixity = MkFixity{getAssoc :: Assoc, getPrecedence :: Int} deriving(Eq, Ord, Show)
+
+data Foo = Foo Int Int

@@ -23,8 +23,23 @@ data Expr a = Var VName a
           | Tup [Expr a] a
           -- annotated expression
           | Annot (Expr a) MonoType a
+          -- case with matches
           | Case (Expr a) [(Pattern a, Expr a)] a
+          -- if then else
           | If (Expr a) (Expr a) (Expr a) a
+          -- infix operator call like a + b. bool is whether parenthesized
+          | VarOp (Expr a) VarOpName Fixity Bool (Expr a) a
+          -- infix operator as a standalone expression. like (+)
+          | OpVar VarOpName a
+          -- infix value constructor operator call like a : b. bool is whether parenthesized
+          | ConOp (Expr a) ConOpName Fixity Bool (Expr a) a
+          -- infix value constructor operator as a standalone expression
+          | ConVar ConOpName a
+          -- infix variable call like a `elem` b. bool is whether parenthesized
+          | VarIn (Expr a) VName Fixity Bool (Expr a) a
+          -- infix value constructor call like a `Foo` b. bool is whether parenthesized
+          | ConIn (Expr a) CName Fixity Bool (Expr a) a
+          | VarOpPrefix
           deriving(Eq, Ord)
 
 instance Show (Expr a) where
