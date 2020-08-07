@@ -20,7 +20,7 @@ instance Show (Pattern a) where
                 PVar{} -> 10
                 PLiteral{} -> 10
                 PCon{} -> 9
-                PTup{} -> 10
+                PTup{} -> 0
                 POr{} -> 3
                 PWild{} -> 10
                 PAnnot{} -> 1

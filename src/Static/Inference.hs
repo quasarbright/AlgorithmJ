@@ -240,6 +240,29 @@ infer e = localReason (Inferring e) $
             retType <- freshMonoType
             unify fType (TArr xType retType)
             return retType
+        BinOp l op _ _ r _ -> do
+            opType <- inferOp op
+            lType <- infer l
+            rType <- infer r
+            retType <- freshMonoType
+            unify opType (TArr lType (TArr rType retType))
+            return retType
+        OpRef op _ -> inferOp op
+        LSection l op _ -> do
+            opType <- inferOp op
+            lType <- infer l
+            rType <- freshMonoType
+            retType <- freshMonoType
+            unify opType (TArr lType (TArr rType retType))
+            return retType
+        RSection op r _ -> do
+            -- TODO abstract all 3 cases
+            opType <- inferOp op
+            lType <- freshMonoType
+            rType <- infer r
+            retType <- freshMonoType
+            unify opType (TArr lType (TArr rType retType))
+            return retType
         Fun pats body _ -> inferFunction pats Nothing body
         Let b body _ -> do
             annots <- processBinding b
@@ -262,6 +285,7 @@ infer e = localReason (Inferring e) $
             check els t
             return t
 
+inferOp op = _
 
 
 -- | check an expression against the given mono type
