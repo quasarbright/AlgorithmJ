@@ -24,6 +24,7 @@ data Expr a = Var VName a
           -- annotated expression
           | Annot (Expr a) MonoType a
           | Case (Expr a) [(Pattern a, Expr a)] a
+          | If (Expr a) (Expr a) (Expr a) a
           deriving(Eq, Ord)
 
 instance Show (Expr a) where
@@ -39,6 +40,7 @@ instance Show (Expr a) where
                 Con{} -> 10
                 Annot{} -> 1
                 Case{} -> 3
+                If {} -> 4
         in case e of
             Var name _ -> shows name
             Con name _ -> shows name
@@ -51,6 +53,7 @@ instance Show (Expr a) where
             Annot e' t _ -> showParen (p > p') $ showsPrec p' e' . showString " :: " . shows t
             Case e' ms _ -> showParen (p > p') $ showString "case " . shows e' . showString " of | " . showString (intercalate " | " msStrs)
                 where msStrs = [concat[show pat," -> ",show rhs] | (pat, rhs) <- ms] -- TODO prevent dangling case issue
+            If cnd thn els _ -> showParen (p > p') $ showString "if " . showsPrec p' cnd . showString " then " . showsPrec p' thn . showString " else " . showsPrec p' els
 
 
 -- combinators for constructing expressions
@@ -99,6 +102,9 @@ unit = tup []
 
 ecase :: Expr () -> [(Pattern (), Expr ())] -> Expr ()
 ecase e ms = Case e ms ()
+
+eif :: Expr () -> Expr () -> Expr () -> Expr ()
+eif cnd thn els = If cnd thn els ()
 
 infixl 2 \::
 (\::) :: Expr () -> MonoType -> Expr ()

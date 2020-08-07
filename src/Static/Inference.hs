@@ -4,8 +4,6 @@ TODO guards
 TODO type classes (HUGE)
 TODO type aliases
 TODO exceptions and top
-TODO mutually recursive type definitions
-TODO if
 TODO I'm worried about users annotating with a tvar that's in scope and messing things up. Make fresh vars syntactically invalid
 -}
 
@@ -258,6 +256,12 @@ infer e = localReason (Inferring e) $
                 [] -> throw EmptyCase
                 _ -> zipWithM_ unify rhsTypes (tail rhsTypes)
             return (head rhsTypes)
+        If cnd thn els _ -> do
+            check cnd tbool
+            t <- infer thn
+            check els t
+            return t
+
 
 
 -- | check an expression against the given mono type

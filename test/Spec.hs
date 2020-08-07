@@ -295,6 +295,24 @@ inferenceTests = TestLabel "inference tests" $ TestList
                           ]]
           (con "Foo" \$ (con "Bar" \$ int 1 \$ con "FEmpty") \$ (con "Bar" \$ char 'c' \$ con "FEmpty")))
       (Mismatch tunit tchar)
+    , tInferExprWithPrelude "if basic"
+        (eif etrue (int 1) (int 2))
+        (TMono tint)
+    , tInferExprWithPrelude "if with id branches"
+        (eif etrue (fun [pvar "x" `pannot` tint] (var "x")) (var "id"))
+        (TMono $ tint \-> tint)
+    , tInferExprWithPrelude "if with id branches reversed"
+        (eif etrue (var "id") (fun [pvar "x" `pannot` tint] (var "x")))
+        (TMono $ tint \-> tint)
+    , tInferExprWithPrelude "if function wrapper"
+        (fun [pvar "cnd", pvar "thn", pvar "els"] (eif (var "cnd") (var "thn") (var "els")))
+        (scheme [1] $ tbool \-> tvar 1 \-> tvar 1 \-> tvar 1)
+    , tInferErrorWithPrelude "if branches different types"
+        (eif etrue (int 1) unit)
+        (Mismatch tint tunit)
+    , tInferErrorWithPrelude "if cond not bool"
+        (eif unit (int 1) (int 2))
+        (Mismatch tbool tunit)
     ]
     {-
     TODO test shadowing
