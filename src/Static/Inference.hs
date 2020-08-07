@@ -285,7 +285,21 @@ infer e = localReason (Inferring e) $
             check els t
             return t
 
-inferOp op = _
+inferOp :: Operator a -> TypeChecker a MonoType
+inferOp op = case op of
+    -- TODO abstract. literally copied from infer
+    VarIn name tag -> infer (Var name tag)
+    ConIn name tag -> infer (Con name tag)
+    VarOp name _ -> do
+        ctx <- getContext <$> get
+        case lookupVarOp ctx name of
+            Nothing -> throw (UnboundVarOp name)
+            Just t -> instantiate t
+    ConOp name _ -> do
+            ctx <- getContext <$> get
+            case lookupConOp ctx name of
+                Nothing -> throw (UnboundConOp name)
+                Just t -> instantiate t
 
 
 -- | check an expression against the given mono type

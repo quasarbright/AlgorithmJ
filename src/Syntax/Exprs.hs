@@ -55,6 +55,7 @@ instance Show (Expr a) where
                 OpRef{} -> 10
                 LSection{} -> 10
                 RSection{} -> 10
+                -- TODO make non-operator precedences outside of the range [1,10]
         in case e of
             Var name _ -> shows name
             Con name _ -> shows name

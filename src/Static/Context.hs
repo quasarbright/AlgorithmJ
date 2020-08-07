@@ -13,12 +13,16 @@ data ContextItem a =
                  | ConAnnot CName Type
                    -- data type's name, parameters, and cases
                  | DataInfo TCName [TVName] [ConDecl a] a
+                 | VarOpAnnot VarOpName Type
+                 | ConOpAnnot ConOpName Type
                  deriving(Eq, Ord)
 
 instance Show (ContextItem a) where
     show (VarAnnot name t) = concat[show name," :: ",show t]
     show (ConAnnot name t) = concat[show name," :: ",show t]
     show (DataInfo tName params cases tag) = show (DataDecl tName params cases tag)
+    show (VarOpAnnot name t) = concat["(",show name,") :: ",show t]
+    show (ConOpAnnot name t) = concat["(",show name,") :: ",show t]
 
 -- | variable annotations, most recent one first
 type Context a = [ContextItem a]
@@ -81,7 +85,9 @@ getContextFreeVars ctx = Set.unions (getContextItemFreeVars <$> ctx)
 -- | get the free type variables in the given context item
 getContextItemFreeVars :: ContextItem a -> Set.Set TVName
 getContextItemFreeVars (VarAnnot _ t) = getTypeFreeVars t
+getContextItemFreeVars (VarOpAnnot _ t) = getTypeFreeVars t
 getContextItemFreeVars (ConAnnot _ t) = getTypeFreeVars t
+getContextItemFreeVars (ConOpAnnot _ t) = getTypeFreeVars t
 getContextItemFreeVars DataInfo{} = Set.empty
 
 -- | get the unbound type variables of the monotype with respect to the context
@@ -98,6 +104,16 @@ lookupVar ctx name = case find predicate ctx of
         predicate (VarAnnot name' _) = name == name'
         predicate _ = False
 
+-- | look up the type of the given variable operator
+lookupVarOp :: Context a -> VarOpName -> Maybe Type
+lookupVarOp ctx name = case find predicate ctx of
+   Just (VarAnnot _ t) -> Just t
+   _ -> Nothing
+   where
+       predicate (VarOpAnnot name' _) = name == name'
+       predicate _ = False
+
+
 -- | look up the type of the given value constructor
 lookupCon :: Context a -> CName -> Maybe Type
 lookupCon ctx name = case find predicate ctx of
@@ -105,6 +121,15 @@ lookupCon ctx name = case find predicate ctx of
     _ -> Nothing
     where
         predicate (ConAnnot name' _) = name == name'
+        predicate _ = False
+
+-- | look up the type of the given value constructor operator
+lookupConOp :: Context a -> ConOpName -> Maybe Type
+lookupConOp ctx name = case find predicate ctx of
+    Just (ConAnnot _ t) -> Just t
+    _ -> Nothing
+    where
+        predicate (ConOpAnnot name' _) = name == name'
         predicate _ = False
 
 -- | look up a value constructor's data type's name
