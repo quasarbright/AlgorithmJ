@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4c3f8cd4a59e3a0cf5d5e6e8d4522fc2e0908053b92ce9b7db6eab8e74b56885
+-- hash: 474f9d4d5072dcaec1431b7a2a08e243524fe810f1ec374f4663e558ae299ab5
 
 name:           AlgorithmJ
 version:        0.1.0.0
@@ -48,6 +48,7 @@ library
   build-depends:
       base >=4.7 && <5
     , containers
+    , parsec
     , transformers
   default-language: Haskell2010
 
@@ -62,6 +63,7 @@ executable AlgorithmJ-exe
       AlgorithmJ
     , base >=4.7 && <5
     , containers
+    , parsec
     , transformers
   default-language: Haskell2010
 
@@ -78,5 +80,6 @@ test-suite AlgorithmJ-test
     , HUnit
     , base >=4.7 && <5
     , containers
+    , parsec
     , transformers
   default-language: Haskell2010
