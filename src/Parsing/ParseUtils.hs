@@ -1,3 +1,6 @@
+{-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE TypeFamilies #-}
+
 module Parsing.ParseUtils where
 
 import Control.Applicative hiding (some, many)
@@ -7,6 +10,8 @@ import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 import qualified Text.Megaparsec.Debug as DBG
+import Data.Maybe
+import Debug.Trace
 
 type Parser = Parsec Void String
 
@@ -46,13 +51,13 @@ pReservedOpWith :: Parser () -> String -> Parser ()
 pReservedOpWith sc' name = void . L.lexeme sc' $ (string name <* notFollowedBy opLetter)
 
 reservedWords :: [String]
-reservedWords = words "data type newtype module import instance class as qualified do of let in case where fun when if then else"
+reservedWords = words "data type newtype module import instance class as qualified do of let in case where fun when if then else begin end _ infixl infixr infix"
 
 reservedOps :: [String]
-reservedOps = words "= -> => <- :: | ; .. \\ @ ~"
+reservedOps = words "= -> => <- :: | ; .. \\ @ ~ ;"
 
 identStart :: Parser Char
-identStart = letterChar <|> char '-'
+identStart = letterChar <|> char '_'
 
 identLetter :: Parser Char
 identLetter = identStart <|> char '\'' <|> numberChar
@@ -99,6 +104,14 @@ wrapSS p = do
 wrapSSWith :: ((a, SS) -> b) -> Parser a -> Parser b
 wrapSSWith f p = f <$> wrapSS p
 
+-- | use like this:
+-- wrapSSApp $ do
+--   n <- L.decimal <* scn
+--   return $ EInt n
+-- It just calls what you return with the ss!
+wrapSSApp :: Parser (SS -> a) -> Parser a
+wrapSSApp p = uncurry ($) <$> wrapSS p
+
 combineSS :: (a1, b1) -> (a2, b2) -> (a1, b2)
 combineSS a b = (fst a, snd b)
 
@@ -116,3 +129,57 @@ chainl1 p op        = do{ x <- p; rest x }
                                     ; rest (f x y)
                                     }
                                 <|> return x
+chainr1 :: Parser a -> Parser (a -> a -> a) -> Parser a
+chainr1 p op        = scan
+                    where
+                      scan      = do{ x <- p; rest x }
+                      rest x    = do f <- op
+                                     f x <$> scan
+                                <|> return x
+
+-- | megaparsec indentBlock without requiring newline
+indentBlock' :: (MonadParsec e s m, Token s ~ Char)
+  => m ()              -- ^ How to consume indentation (white space)
+  -> m (L.IndentOpt m a b) -- ^ How to parse “reference” token
+  -> m a
+indentBlock' sc' r = do
+  sc'
+  ref <- L.indentLevel
+  a   <- traceShow ref r
+  case a of
+    L.IndentNone x -> x <$ sc'
+    L.IndentMany indent f p -> do
+      mlvl <- (optional . try) (L.indentGuard sc' GT ref)
+      done <- isJust <$> optional eof
+      case (mlvl, done) of
+        (Just lvl, False) ->
+          indentedItems ref (fromMaybe lvl indent) sc' p >>= f
+        _ -> sc' *> f []
+    L.IndentSome indent f p -> do
+      pos <- L.indentGuard sc' GT ref
+      let lvl = fromMaybe pos indent
+      x <- if | pos <= ref -> L.incorrectIndent GT ref pos
+              | pos == lvl -> p
+              | otherwise  -> L.incorrectIndent EQ lvl pos
+      xs  <- indentedItems ref lvl sc' p
+      f (x:xs)
+
+-- | Grab indented items. This is a helper for 'indentBlock', it's not a
+-- part of the public API.
+indentedItems :: MonadParsec e s m
+  => Pos               -- ^ Reference indentation level
+  -> Pos               -- ^ Level of the first indented item ('lookAhead'ed)
+  -> m ()              -- ^ How to consume indentation (white space)
+  -> m b               -- ^ How to parse indented tokens
+  -> m [b]
+indentedItems ref lvl sc' p = go
+  where
+    go = do
+      sc'
+      pos  <- L.indentLevel
+      done <- isJust <$> optional eof
+      if done
+        then return []
+        else if | pos <= ref -> return []
+                | pos == lvl -> (:) <$> p <*> go
+                | otherwise  -> L.incorrectIndent EQ lvl pos

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: a866fca94aab2aae2457db5ee04f138fa785b2d9c6ed880cc9b187e18bab761c
+-- hash: 4480e4b65b580f6fbe843e495fcc123860ceecf090284e4a08d5241df34bd41d
 
 name:           AlgorithmJ
 version:        0.1.0.0
@@ -29,6 +29,7 @@ library
   exposed-modules:
       Common
       Lib
+      Parsing.EasyParser
       Parsing.ParseAst
       Parsing.Parser
       Parsing.ParseUtils

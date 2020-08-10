@@ -8,23 +8,31 @@ import Data.Void
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
+import Debug.Trace
 
 import Parsing.ParseUtils
 import Parsing.ParseAst
 
-pExpr = undefined
+-- | makes its own line fold
+pExpr :: Parser (Expr SS)
+pExpr = dbg "expression (lf)" . L.lineFold scn $ \sc' -> topParser exprParsers sc'
 
-pPatternExpr = undefined
---pExpr :: Parser (Expr SS)
---pExpr = dbg "expression" . L.lineFold scn $ \sc' -> topExpr sc'
---    where
---        topExpr :: Parser () -> Parser (Expr SS)
---        topExpr = foldr (\ep p -> ep p) (error "you will never arrive at the truth") (cycle exprParsers)
+pExprWith :: Parser () -> Parser (Expr SS)
+pExprWith sc' = dbg "expression (no lf)" $ topParser exprParsers sc'
 
---exprParsers :: [ExprParser]
---exprParsers = []
+exprParsers :: [ExprParser]
+exprParsers = [pCaseLetFun, pWhere, pIf, pOr, pAnnot, pBinop, pApp, pAtom]
 
---                child parser                      ws parser
+pPatternExpr :: Parser (Expr SS)
+pPatternExpr = dbg "pattern expr (lf)" . L.lineFold scn $ \sc' -> topParser patternParsers sc'
+
+patternParsers :: [ExprParser]
+patternParsers = [pAtom]-- [pOr, pAnnot, pBinop, pApp, pAtom]
+
+topParser :: [(Parser a -> Parser b) -> Parser a -> Parser b] -> Parser a -> Parser b
+topParser parsers = foldr (\ep p -> ep p) (error "you will never arrive at the truth") (cycle parsers)
+
+--                child parser                      ws parser    output
 type ExprParser = (Parser() -> Parser (Expr SS)) -> Parser () -> Parser (Expr SS)
 
 -- | parses a case expression
@@ -34,17 +42,16 @@ type ExprParser = (Parser() -> Parser (Expr SS)) -> Parser () -> Parser (Expr SS
 --     ...
 pCase :: ExprParser
 pCase child sc' = dbg "case" $ do
-    ((e, ms), ss) <- wrapSS . L.indentBlock scn $ do
-        pKeyword "case"
+    ((e, ms), ss) <- wrapSS . trace "case indent" (L.indentBlock scn) $ do
+        pKeywordWith sc' "case"
         e <- child sc'
-        pKeywordWith sc' "of"
+        pKeyword "of"
         return $ L.IndentSome Nothing (return . (e,)) pMatch
     return (Case e ms ss)
 
 -- | parses p -> e
 pMatch :: Parser (Expr SS, Expr SS)
 pMatch = do
-    -- maybe you should take in two children or just have a pPatternExpr
     lhs <- pPatternExpr -- need fresh line fold here
     pReservedOp "->" -- TODO line fold? hope not
     rhs <- pExpr -- need fresh line fold here
@@ -54,7 +61,7 @@ pMatch = do
 pLet :: ExprParser
 pLet child sc' = dbg "let" $ do
     ((decls, body), ss) <- wrapSS $ do
-        decls <- L.indentBlock scn $ do
+        decls <- indentBlock' scn $ do
             pKeywordWith sc' "let"
             return pDeclsHelp
         pKeywordWith sc' "in"
@@ -94,13 +101,13 @@ pWhere child sc' = dbg "expression with where" $ do
 -- | where decls
 pWhereHelp :: Parser () -> Parser [Decl SS]
 pWhereHelp sc' = do
-    L.indentBlock scn $ do
+    indentBlock' scn $ do
         pKeywordWith sc' "where"
         return pDeclsHelp
 
 -- | if e then e else e
-pIf :: ExprParser
-pIf child sc' = dbg "if" $ do
+pIf_ :: ExprParser
+pIf_ child sc' = dbg "if" $ do
     ((cnd,thn,els), ss) <- wrapSS $ do
         pKeywordWith sc' "if"
         cnd <- child sc'
@@ -111,21 +118,34 @@ pIf child sc' = dbg "if" $ do
         return (cnd,thn,els)
     return $ If cnd thn els ss
 
+pIf :: ExprParser
+pIf child sc' = pIf_ child sc' <|> child sc'
+
 -- | e | e
 pOr :: ExprParser
 pOr child sc' = dbg "or" $ do
     (es, ss) <- wrapSS $ (child sc' <* vot sc') `sepBy1` pReservedOp "|" -- TODO <* necessary?
-    return $ Or es ss
+    return $ case es of
+        [e] -> e
+        _ -> Or es ss
 
 -- | e :: t
 pAnnot :: ExprParser
 pAnnot child sc' = dbg "annot" $ do
-    ((e,t), ss) <- wrapSS $ do
-        e <- child sc'
-        pReservedOpWith sc' "::"
-        t <- pTypeWith sc'
-        return (e, t)
-    return $ Annot e t ss
+    startPos <- getSourcePos
+    e <- child sc'
+    mType <- optional (pAnnotHelp sc')
+    case mType of
+        Nothing -> return e
+        Just t -> do
+            endPos <- getSourcePos
+            return $ Annot e t (startPos, endPos)
+
+-- | :: t
+pAnnotHelp :: Parser () -> Parser (Type SS)
+pAnnotHelp sc' = do
+    pReservedOpWith sc' "::"
+    pTypeWith sc'
 
 -- | e op e (left associative, ignoring precedence)
 pBinop :: ExprParser
@@ -187,12 +207,14 @@ pString :: Parser (Expr SS)
 pString = dbg "string" (wrapSSWith (uncurry PString) $ lexeme (between (char '"') (char '"') (many L.charLiteral)))
 
 
+pType :: Parser (Type SS)
+pType = dbg "type" $ fail "todo"
 
-pType = undefined
+pTypeWith :: Parser () -> Parser (Type SS)
+pTypeWith _ = dbg "type" $ fail "todo"
 
-pTypeWith = undefined
+pDecl :: Parser (Decl SS)
+pDecl = dbg "decl" $ fail "todo"
 
-pDecl = undefined
-
-pDeclsHelp :: L.IndentOpt Parser [b] b
+pDeclsHelp :: L.IndentOpt Parser [Decl SS] (Decl SS)
 pDeclsHelp = L.IndentSome Nothing return pDecl

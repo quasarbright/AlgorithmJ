@@ -16,7 +16,7 @@ Some noteworthy things:
 -}
 
 defaultFixity :: Fixity
-defaultFixity = MkFixity LAssoc (9)
+defaultFixity = MkFixity LAssoc 9
 
 -- TODO sections
 -- TODO guards
@@ -30,6 +30,7 @@ data Expr a = Var String a -- variable or constructor
              | OpVar String a -- (+) or (:)
              | Tup [Expr a] a
              | List [Expr a] a
+             | BeginEnd (Expr a) a -- begin e end like parens
              | App [Expr a] a
              | Binop (Expr a) String Fixity (Expr a) a
              | Annot (Expr a) (Type a) a
@@ -39,7 +40,29 @@ data Expr a = Var String a -- variable or constructor
              | Fun (Expr a) (Expr a) a
              | Let [Decl a] (Expr a) a
              | Case (Expr a) [(Expr a, Expr a)] a
-             deriving(Eq, Ord, Show)
+             deriving(Eq, Ord)
+
+instance Show (Expr a) where
+    show e = case e of
+        Var name _ -> "(Var "++name++")"
+        PInt n _ -> "(Int "++show n++")"
+        PDouble d _ -> "(Double "++show d++")"
+        PChar c _ -> "(Char "++show c++")"
+        PString s _ -> "(String "++show s++")"
+        Wild{} -> "Wild"
+        OpVar name _ -> "(OpVar "++name++")"
+        Tup es _ -> "(Tup "++show es++")"
+        List es _ -> "(List "++show es++")"
+        BeginEnd e' _ -> "(BeginEnd "++show e'++")"
+        App es _ -> "(App "++show es++")"
+        Binop left name fx right _ -> "(Binop "++show left++" ("++show name++") ("++show fx++") "++show right++")"
+        Annot e' t _ -> "(Annot "++show e'++" "++show t++")"
+        Or es _ -> "(Or "++show es++")"
+        If cnd thn els _ -> "(If "++show cnd++" "++show thn++" "++show els++")"
+        Where e' decls _ -> "(Where "++show e'++" "++show decls++")"
+        Fun arg ret _ -> "(Fun "++show arg++" "++show ret++")"
+        Let decls body _ -> "(Let "++show decls++" "++show body++")"
+        Case e' ms _ -> "(Case "++show e'++" "++show ms++")"
 
 getTag :: Expr a -> a
 getTag e = case e of
@@ -51,6 +74,7 @@ getTag e = case e of
     Wild a -> a
     Tup _ a -> a
     List _ a -> a
+    BeginEnd _ a -> a
     App _ a -> a
     OpVar _ a -> a
     Binop _ _ _ _ a -> a
@@ -64,22 +88,55 @@ getTag e = case e of
 
 data Type a = TVar String a
             | TOpVar String a
-            | TList (Type a) a
+            | TJustList a -- []
+            | TList (Type a) a -- [t]
             | TTup [Type a] a
             | TApp [Type a] a
-            | TBinop (Type a) String Fixity (Expr a) a
+            | TBinop (Type a) String Fixity (Type a) a
             | TArr (Type a) (Type a) a
-            deriving(Eq, Ord, Show)
+            deriving(Eq, Ord)
+
+instance Show (Type a) where
+    show t_ = case t_ of
+        TVar name _ -> "(Var "++name++")"
+        TOpVar name _ -> "(OpVar "++name++")"
+        TJustList{} -> "TJustList"
+        TList t _ -> "(TList "++show t++")"
+        TTup ts _ -> "(TTup "++show ts++")"
+        TApp ts _ -> "(TApp "++show ts++")"
+        TBinop left name fx right _ -> "(TBinop "++show left++" ("++show name++") ("++show fx++") "++show right++")"
+        TArr arg ret _ -> "(TArr "++show arg++" "++show ret++")"
+
+getTypeTag :: Type a -> a
+getTypeTag t_ = case t_ of
+    TVar _ a -> a
+    TOpVar _ a -> a
+    TList _ a -> a
+    TTup _ a -> a
+    TApp _ a -> a
+    TBinop _ _ _ _ a -> a
+    TArr _ _ a -> a
+    TJustList a -> a
 
 --data Guard a = Guard (Expr a) (Expr a) a deriving(Eq, Ord, Show)
 
 data Decl a = Binding (Expr a) (Expr a) a
             | AnnotDecl String (Type a) a
+            | OpAnnotDecl String (Type a) a
             | DataDecl String [String] [Type a] a
             | FixityDecl Fixity String a
-            deriving(Eq, Ord, Show)
+            deriving(Eq, Ord)
 
+instance Show (Decl a) where
+    show d_ = case d_ of
+        Binding lhs rhs _ -> "(Binding "++show lhs++" "++show rhs++")"
+        AnnotDecl name t _ -> "(AnnotDecl "++name++" "++show t++")"
+        OpAnnotDecl name t _ -> "(OpAnnotDecl "++name++" "++show t++")"
+        DataDecl name params cases _ -> "(DataDecl "++name++" "++show params++" "++show cases++")"
+        FixityDecl fx name _ -> "(FixityDecl ("++show fx++") "++show name++")"
 
+data Program a = Program [Decl a] a deriving(Eq, Ord)
 
-
+instance Show (Program a) where
+    show (Program decls _) = unlines (show <$> decls)
 
