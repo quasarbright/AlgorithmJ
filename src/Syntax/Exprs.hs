@@ -21,6 +21,7 @@ data Expr a = Var VName a
           | LetRec [Binding a] (Expr a) a
           -- tuple
           | Tup [Expr a] a
+          | List [Expr a] a
           -- annotated expression
           | Annot (Expr a) MonoType a
           -- case with matches
@@ -78,6 +79,26 @@ instance Show (Expr a) where
             OpRef op _ -> showParen True $ shows op
             LSection l op _ -> showParen True $ showsPrec p' l . showString " " . shows op
             RSection op r _ -> showParen True $ shows op . showString " " . showsPrec p' r
+
+getTag :: Expr a -> a
+getTag e_ = case e_ of
+    Var _ a -> a
+    Con _ a -> a
+    ELiteral _ a -> a
+    Tup _ a -> a
+    List _ a -> a
+    OpRef _ a -> a
+    Fun _ _ a -> a
+    Annot _ _ a -> a
+    Case _ _ a -> a
+    Let _ _ a -> a
+    LetRec _ _ a -> a
+    App _ _ a -> a
+    LSection _ _ a -> a
+    RSection _ _ a -> a
+    If _ _ _ a -> a
+    BinOp _ _ _ _ _ a -> a
+
 
 data Operator a = VarOp VarOpName a
               | ConOp ConOpName a

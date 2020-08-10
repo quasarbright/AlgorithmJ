@@ -34,6 +34,15 @@ instance Show (Pattern a) where
             PWild _ -> showString "_"
             PAnnot pat' t _ -> showParen (p > p') $ showsPrec p' pat' . showString " :: " . shows t
 
+getPatternTag :: Pattern a -> a
+getPatternTag p_ = case p_ of
+    PVar _ a -> a
+    PLiteral _ a -> a
+    PCon _ _ a -> a
+    PTup _ a -> a
+    POr _ _ a -> a
+    PWild a -> a
+    PAnnot _ _ a -> a
 
 -- combinators for constructing patterns
 
