@@ -13,6 +13,9 @@ import Debug.Trace
 import Parsing.ParseUtils
 import Parsing.ParseAst
 
+
+--TODO maybe force indented case, let, and where and make simple expressions one-line
+
 -- | makes its own line fold
 pExpr :: Parser (Expr SS)
 pExpr = dbg "expression (lf)" . L.lineFold scn $ \sc' -> topParser exprParsers sc'

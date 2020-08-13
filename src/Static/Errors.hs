@@ -12,6 +12,7 @@ data StaticError = Mismatch MonoType MonoType
                | UnboundCon CName
                | UnboundConOp ConOpName
                | EmptyCase
+               | IrresolvableInfix SS
                | InvalidExpr (P.Expr SS) SS
                | InvalidPattern (P.Expr SS) SS
                | InvalidType (P.Type SS) SS

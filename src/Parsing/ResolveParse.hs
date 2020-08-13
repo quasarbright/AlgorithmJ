@@ -153,7 +153,7 @@ typeToMonotype t_ = case t_ of
     P.TApp (P.TVar name _:ts) a
         | Char.isUpper (head name) -> TCon (MkTCName name) <$> mapM typeToMonotype ts
         | otherwise -> Left $ InvalidType t_ a
-    P.TApp (P.OpVar{}:_) _ -> error "todo" -- TODO type op vars
+    P.TApp (P.TOpVar{}:_) _ -> error "todo" -- TODO type op vars
     P.TBinop{} -> error "todo" -- TODO type ops
     P.TArr arg ret _ -> TArr <$> typeToMonotype arg <*> typeToMonotype ret
 
