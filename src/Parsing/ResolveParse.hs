@@ -166,5 +166,3 @@ declsToBindings = undefined
 
 --declToBinding :: Decl SS -> Either StaticError (Binding SS)
 --declToBinding = undefined
-
---resolveFixities :: P.Program a -> P.Program TODO separate module

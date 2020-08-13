@@ -1,7 +1,8 @@
-module Static.UnionFind(UnionFind(), empty, union, find, toRep) where
+module Static.UnionFind(UnionFind(), empty, union, find, toRep, group) where
 
 import qualified Data.Map as Map
 import qualified Data.List as List
+import Common
 
 type UnionFind a = (Map.Map a a)
 
@@ -38,3 +39,8 @@ toRep uf a = case Map.lookup a uf of
     Just a'
         | a == a' -> [a]
         | otherwise -> a:a':toRep uf a'
+
+group :: Ord a => UnionFind a -> [([a], a)]
+group uf = let keys = Map.keys uf in
+    [(filter (\k' -> find uf k' == k) keys, k) | k <- keys]
+    |> filter (\(xs,_) -> not $ null xs)

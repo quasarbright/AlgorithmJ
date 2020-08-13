@@ -3,8 +3,10 @@ import Common
 import Syntax.Exprs
 import Syntax.Types
 import Static.UnionFind
+import qualified Parsing.Graph as Graph
 import Static.Inference hiding(union, find)
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import Syntax.Names
 import Syntax.Program
 import Syntax.Decls
@@ -26,6 +28,28 @@ ufTests = TestLabel "union find tests" $ TestList
     , teq "find 1..5 inefficient" 5 (find (Map.fromList (zip [1..5] [2..5])) 1)
     , teq "find 1..5 1" 5 (find (Map.fromList (zip [1..5] [2..5])) 2)
     , teq "inefficient construction :(" (Map.fromList [(1,5),(2,5),(5,6),(6,6)]) (foldr (\ (a,b) uf -> union b a uf) empty [(5, 6), (1,5), (2,5)])
+    , teq "group" [([1,2,3], 3), ([4,5,6], 6), ([7,8], 8)] (group (foldr (\ (a,b) uf -> union b a uf) empty [(1,2),(3,2),(2,2),(4,5),(5,6),(6,6),(7,8)]))
+    ]
+
+graphTests = TestLabel "graph tests" $ TestList
+    [ tpass
+    , teq "json dependency"
+        (Graph.fromList [ (Set.fromList ["array", "json", "object"], Set.fromList ["num"])
+                        , (Set.fromList ["array", "json", "object"], Set.fromList ["array", "json", "object"])
+                        , (Set.fromList ["num"], Set.fromList ["num"])
+                        , (Set.fromList ["array", "json", "object"], Set.fromList ["string"])
+                        , (Set.fromList ["program"], Set.fromList ["array", "json", "object"])
+                        ])
+        (Graph.coalesceSCCs $ Graph.fromList [ ("json", "array")
+                                             , ("array", "json")
+                                             , ("json", "object")
+                                             , ("object", "json")
+                                             , ("json", "num")
+                                             , ("num", "num")
+                                             , ("json", "string")
+                                             , ("object", "string")
+                                             , ("program", "json")
+                                             ])
     ]
 
 tInfer :: String -> Expr () -> Type -> Test
@@ -323,6 +347,7 @@ inferenceTests = TestLabel "inference tests" $ TestList
 tests = TestList
     [ tpass
     , ufTests
+    , graphTests
     , inferenceTests
     ]
 
