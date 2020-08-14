@@ -1,6 +1,8 @@
 module Parsing.ParseAst where
 
 import Syntax.Names
+import qualified Data.Set as Set
+import Data.Set(Set)
 
 {-
 I read that in the haskell parser, they don't precisely parse haskell. They parse a superset of the language and try
@@ -86,6 +88,34 @@ getTag e = case e of
     Let _ _ a -> a
     Case _ _ a -> a
 
+getExprFreeVars :: Expr a -> Set String
+getExprFreeVars e_ =
+    let letWhere e decls =
+           let efvs = Set.difference (getExprFreeVars e) (Set.unions (getDeclBoundVars <$> decls))
+               dsfvs = Set.unions (getDeclFreeVars <$> decls)
+           in Set.union efvs dsfvs
+    in case e_ of
+        Var name _ -> Set.singleton name
+        OpVar name _ -> Set.singleton name
+        PInt{} -> Set.empty
+        PDouble{} -> Set.empty
+        PChar{} -> Set.empty
+        PString{} -> Set.empty
+        Wild{} -> Set.empty
+        Tup es _ -> Set.unions (getExprFreeVars <$> es)
+        List es _ -> Set.unions (getExprFreeVars <$> es)
+        BeginEnd e _ -> getExprFreeVars e
+        App es _ -> Set.unions (getExprFreeVars <$> es)
+        Binop left op _ right _ -> Set.insert op $ Set.unions (getExprFreeVars <$> [left, right])
+        Annot e _ _ -> getExprFreeVars e
+        Or es _ -> Set.unions (getExprFreeVars <$> es)
+        If cnd thn els _ -> Set.unions (getExprFreeVars <$> [cnd, thn, els])
+        Where e decls _ -> letWhere e decls
+        Fun p body _ -> Set.difference (getExprFreeVars p) (getExprFreeVars body)
+        Let decls e _ -> letWhere e decls
+        Case e ms _ -> Set.union (getExprFreeVars e) msFVS
+            where msFVS = Set.unions [Set.difference (getExprFreeVars p) (getExprFreeVars body) | (p,body) <- ms]
+
 data Type a = TVar String a
             | TOpVar String a
             | TJustList a -- []
@@ -134,6 +164,22 @@ instance Show (Decl a) where
         OpAnnotDecl name t _ -> "(OpAnnotDecl "++name++" "++show t++")"
         DataDecl name params cases _ -> "(DataDecl "++name++" "++show params++" "++show cases++")"
         FixityDecl fx name _ -> "(FixityDecl ("++show fx++") "++show name++")"
+
+getDeclFreeVars :: Decl a -> Set String
+getDeclFreeVars d_ = case d_ of
+    Binding _ body _ -> getExprFreeVars body -- assume non-recursive
+    AnnotDecl{} -> Set.empty
+    OpAnnotDecl{} -> Set.empty
+    DataDecl{} -> Set.empty
+    FixityDecl{} -> Set.empty
+
+getDeclBoundVars :: Decl a -> Set String
+getDeclBoundVars d_ = case d_ of
+    Binding p _ _ -> getExprFreeVars p -- assume non-recursive
+    AnnotDecl{} -> Set.empty
+    OpAnnotDecl{} -> Set.empty
+    DataDecl{} -> Set.empty
+    FixityDecl{} -> Set.empty
 
 data Program a = Program [Decl a] a deriving(Eq, Ord)
 

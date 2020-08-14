@@ -50,6 +50,29 @@ graphTests = TestLabel "graph tests" $ TestList
                                              , ("object", "string")
                                              , ("program", "json")
                                              ])
+    , teq "top sort simple"
+        [1,2,3,4]
+        (Graph.topologicalSort $ Graph.fromList [ (4, 3)
+                                                , (3, 2)
+                                                , (2, 1)
+                                                ])
+    , teq "top sort complex (has self-edges)"
+        [Set.fromList ["num"], Set.fromList ["string"], Set.fromList ["array", "json", "object"], Set.fromList ["program"]]
+        (Graph.topologicalSort $ Graph.fromList [ (Set.fromList ["array", "json", "object"], Set.fromList ["num"])
+                                                , (Set.fromList ["array", "json", "object"], Set.fromList ["array", "json", "object"])
+                                                , (Set.fromList ["num"], Set.fromList ["num"])
+                                                , (Set.fromList ["array", "json", "object"], Set.fromList ["string"])
+                                                , (Set.fromList ["program"], Set.fromList ["array", "json", "object"])
+                                                ])
+    , teq "top sort disconnected"
+        [1,2,3,4,9,10,11,12]
+        (Graph.topologicalSort $ Graph.fromList [ (12, 11)
+                                                , (11, 10)
+                                                , (10, 9)
+                                                , (4, 3)
+                                                , (3, 2)
+                                                , (2, 1)
+                                                ])
     ]
 
 tInfer :: String -> Expr () -> Type -> Test

@@ -101,3 +101,25 @@ coalesceSCCs g =
         -- | maps an element to the set of nodes in its SCC
         replacement x = Set.fromList $ fromMaybe (error "dependency analysis error") (List.find (x `elem`) groups)
     in coalesceWith replacement g
+
+-- topological sort
+
+topologicalSort :: (Ord a, Show a) => Graph a -> [a]
+topologicalSort g = snd (execState (mapM_ topologicalSortHelp (getNodes g)) (Set.empty, []))
+    where
+        topologicalSortHelp curr = do
+            let parents = getParents g curr
+            (visited, ans) <- get
+            if curr `elem` visited then return ()
+            else do
+                put (Set.insert curr visited, ans)
+                let go parent = do
+                        (visited', _) <- get
+                        if parent `elem` visited'
+                        then return ()
+                        else topologicalSortHelp parent
+                mapM_ go parents
+                (visited', ans') <- get
+                put (visited', ans'++[curr])
+
+

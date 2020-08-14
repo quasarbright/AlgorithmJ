@@ -14,6 +14,13 @@ import Static.Errors
 import Parsing.ParseUtils(SS, combineSS)
 
 import qualified Data.Char as Char
+import qualified Data.Set as Set
+import Data.Set(Set)
+import qualified Data.Map as Map
+import Data.Map(Map)
+import qualified Parsing.Graph as Graph
+import Parsing.Graph(Graph)
+import Data.Maybe(fromMaybe, catMaybes)
 
 {-
 converts a parsing AST to a Syntax AST
@@ -157,9 +164,23 @@ typeToMonotype t_ = case t_ of
     P.TBinop{} -> error "todo" -- TODO type ops
     P.TArr arg ret _ -> TArr <$> typeToMonotype arg <*> typeToMonotype ret
 
-
 declsToDecls :: [P.Decl SS] -> Either StaticError [Decl SS]
 declsToDecls = undefined
+
+groupBindingDecls :: [P.Decl SS] -> Either StaticError [Either [P.Decl SS] (P.Decl SS)]
+groupBindingDecls decls =
+    let
+        boundVarToDecl = Map.fromList $ [(v, decl) | decl <- decls, v <- Set.toList (P.getDeclBoundVars decl)]
+        replacement v = fromMaybe (error "no decl found") (Map.lookup v boundVarToDecl)
+        deps = getDeclDeps `concatMap` decls
+        getDeclDeps decl@(P.Binding _ body _) =
+            let bodyFVS = P.getExprFreeVars body
+                referencedDecls = catMaybes [Map.lookup name boundVarToDecl | name <- Set.toList bodyFVS]
+            in [(decl, referencedDecl) | referencedDecl <- referencedDecls]
+        declGraph = Graph.fromList deps
+        declGraph' = Graph.coalesceSCCs declGraph
+        
+    in undefined
 
 declsToBindings :: [P.Decl SS] -> Either StaticError [Binding SS]
 declsToBindings = undefined
