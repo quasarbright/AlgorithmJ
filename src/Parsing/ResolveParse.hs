@@ -167,11 +167,10 @@ typeToMonotype t_ = case t_ of
 declsToDecls :: [P.Decl SS] -> Either StaticError [Decl SS]
 declsToDecls = undefined
 
+-- TODO still have to pair up annotations with decls somehow
 groupBindingDecls :: [P.Decl SS] -> Either StaticError [Either [P.Decl SS] (P.Decl SS)]
 groupBindingDecls decls =
     let
-        boundVarToDecl = Map.fromList $ [(v, decl) | decl <- decls, v <- Set.toList (P.getDeclBoundVars decl)]
-        replacement v = fromMaybe (error "no decl found") (Map.lookup v boundVarToDecl)
         deps = getDeclDeps `concatMap` decls
         getDeclDeps decl@(P.Binding _ body _) =
             let bodyFVS = P.getExprFreeVars body
@@ -179,8 +178,14 @@ groupBindingDecls decls =
             in [(decl, referencedDecl) | referencedDecl <- referencedDecls]
         declGraph = Graph.fromList deps
         declGraph' = Graph.coalesceSCCs declGraph
-        
-    in undefined
+        sortedDeclGroups = Graph.topologicalSort declGraph'
+        finalizedDeclGroup group = case Set.toList group of
+            [decl]
+                | group `elem` Graph.getChildren declGraph' group -> Left group -- self-edge, recursive
+                | otherwise -> Right decl
+            _ -> Left group
+        finalizedDeclGroups = finalizedDeclGroup <$> sortedDeclGroups
+    in finalizedDeclGroups
 
 declsToBindings :: [P.Decl SS] -> Either StaticError [Binding SS]
 declsToBindings = undefined
