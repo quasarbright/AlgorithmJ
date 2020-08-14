@@ -169,7 +169,7 @@ pChar :: Parser (Expr SS)
 pChar = dbg "char" . wrapSSApp $ PChar <$> lexeme' (between (char '\'') (char '\'') L.charLiteral)
 
 pString :: Parser (Expr SS)
-pString = dbg "string" . wrapSSApp $ PString <$> lexeme' (between (char '"') (char '"') (many L.charLiteral))
+pString = dbg "string" . wrapSSApp $ PString <$> lexeme' (char '"' >> manyTill L.charLiteral (char '"'))
 
 pDouble :: Parser (Expr SS)
 pDouble = dbg "float" . wrapSSApp $ PDouble <$> lexeme' L.float

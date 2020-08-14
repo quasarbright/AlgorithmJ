@@ -207,7 +207,7 @@ pChar :: Parser (Expr SS)
 pChar = dbg "char" (wrapSSWith (uncurry PChar) $ lexeme (between (char '\'') (char '\'') L.charLiteral))
 
 pString :: Parser (Expr SS)
-pString = dbg "string" (wrapSSWith (uncurry PString) $ lexeme (between (char '"') (char '"') (many L.charLiteral)))
+pString = dbg "string" (wrapSSWith (uncurry PString) $ lexeme (char '"' >> manyTill L.charLiteral (char '"')))
 
 
 pType :: Parser (Type SS)
