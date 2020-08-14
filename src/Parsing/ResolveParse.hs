@@ -15,12 +15,12 @@ import Parsing.ParseUtils(SS, combineSS)
 
 import qualified Data.Char as Char
 import qualified Data.Set as Set
-import Data.Set(Set)
+--import Data.Set(Set)
 import qualified Data.Map as Map
-import Data.Map(Map)
+--import Data.Map(Map)
 import qualified Parsing.Graph as Graph
-import Parsing.Graph(Graph)
-import Data.Maybe(fromMaybe, catMaybes)
+--import Parsing.Graph(Graph)
+import Data.Maybe(catMaybes)
 
 {-
 converts a parsing AST to a Syntax AST
@@ -161,6 +161,7 @@ typeToMonotype t_ = case t_ of
         | Char.isUpper (head name) -> TCon (MkTCName name) <$> mapM typeToMonotype ts
         | otherwise -> Left $ InvalidType t_ a
     P.TApp (P.TOpVar{}:_) _ -> error "todo" -- TODO type op vars
+    P.TApp _ a -> Left $ InvalidType t_ a
     P.TBinop{} -> error "todo" -- TODO type ops
     P.TArr arg ret _ -> TArr <$> typeToMonotype arg <*> typeToMonotype ret
 
@@ -177,6 +178,7 @@ groupBindingDecls decls =
             let bodyFVS = P.getExprFreeVars body
                 referencedDecls = catMaybes [Map.lookup name boundVarToDecl | name <- Set.toList bodyFVS]
             in [(decl, referencedDecl) | referencedDecl <- referencedDecls]
+        getDeclDeps _ = []
         declGraph = Graph.fromList deps
         declGraph' = Graph.coalesceSCCs declGraph
         sortedDeclGroups = Graph.topologicalSort declGraph'

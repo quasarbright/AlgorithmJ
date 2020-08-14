@@ -171,12 +171,12 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferExprWithPrelude "list tail" ("xs"\. ecase (var "xs") [(pcon "Cons" [pwild, pvar "xs'"], var "xs'")]) (scheme [1] $ tlist (tvar 1) \-> tlist (tvar 1))
     , tInferExprWithPrelude "list tail shadow" ("xs"\. ecase (var "xs") [(pcon "Cons" [pwild, pvar "xs"], var "xs")]) (scheme [1] $ tlist (tvar 1) \-> tlist (tvar 1))
     , tInferExprWithPrelude "[] -> [] | xs -> [0]"
-        ("xs"\. ecase (var "xs") [(pcon "Cons" [pwild, pvar "xs'"], con "Cons" \$ int 0 \$ elist[]), (pcon "Empty" [], elist[])])
+        ("xs"\. ecase (var "xs") [(pcon "Cons" [pwild, pvar "xs'"], con "Cons" \$ int 0 \$ elist[]), (plist [], elist[])])
         (scheme [1] $ tlist (tvar 1) \-> tlist tint)
     , tInferExprWithPrelude "put 0 at head"
             ("xs"\. ecase (var "xs")
                 [ (pcon "Cons" [pwild, pvar "xs'"], con "Cons" \$ int 0 \$ var "xs'")
-                , (pcon "Empty" [],                 elist[])
+                , (plist [],                 elist[])
                 ])
             (TMono $ tlist tint \-> tlist tint)
     , tInferExprWithPrelude "put 0 at head wildcard"
@@ -188,7 +188,7 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferExprWithPrelude "map first element"
             ("f"\."xs"\. ecase (var "xs")
                 [ (pcon "Cons" [pvar "x", pvar "xs'"], con "Cons" \$ (var "f" \$ var "x") \$ var "xs'")
-                , (pcon "Empty" [],                    var "xs")
+                , (plist [],                    var "xs")
                 ])
             (scheme [1] $ (tvar 1 \-> tvar 1) \-> tlist (tvar 1) \-> tlist (tvar 1))
     , tInferExprWithPrelude "map first element wildcard"
@@ -236,7 +236,7 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferErrorWithPrelude "variable different types in or pattern"
         (ecase (elist [int 1, int 2, int 3]) [(pcon "Cons" [pvar "x",pwild] \| pcon "Cons" [pwild, pvar "x"], var "x")])
         (Mismatch tint (tlist tint))
-    , tInferErrorWithPrelude "mixed list fails" (elist [int 1, unit, char 'c']) (Mismatch tunit tchar)
+    , tInferErrorWithPrelude "mixed list fails" (elist [int 1, unit, char 'c']) (Mismatch tint tunit)
     , tInferExprWithPrelude "[int -> int, a -> a]" (elist ["x"\.var"x"\::tint\->tint, "x"\.var"x"]) (TMono $ tlist (tint \-> tint))
     , tInferExprWithPrelude "[a -> a, int -> int]" (elist ["x"\.var"x", "x"\.var"x"\::tint\->tint]) (TMono $ tlist (tint \-> tint))
     , tInferExprWithPrelude "list head with pattern lambda"
@@ -267,7 +267,7 @@ inferenceTests = TestLabel "inference tests" $ TestList
         (letrec [fbind "map" [pvar "f", pvar "xs"]
             (ecase (var "xs")
                 [(pcon "Cons" [pvar "x", pvar "xs"], (var "f" \$ var "x") \: (var "map" \$ var "f" \$ var "xs")),
-                 (pcon "Empty" []                  , elist [])])]
+                 (plist []                  , elist [])])]
         (var "map"))
         (scheme [1,2] $ (tvar 1 \-> tvar 2) \-> tlist (tvar 1) \-> tlist (tvar 2))
     , tInferExprWithPrelude "[1,1,1,1,...]"
@@ -304,14 +304,14 @@ inferenceTests = TestLabel "inference tests" $ TestList
     , tInferExprWithPrelude "multi function list map no annot"
         (letrec [fbinds "map"
             [ ([pvar "f", pcon "Cons" [pvar "x", pvar "xs"]], (var "f" \$ var "x") \: (var "map" \$ var "f" \$ var "xs"))
-            , ([pwild, pcon "Empty" []], elist [])
+            , ([pwild, plist []], elist [])
             ]]
         (var "map"))
         (scheme [1,2] $ (tvar 1 \-> tvar 2) \-> tlist (tvar 1) \-> tlist (tvar 2))
     , tInferExprWithPrelude "multi function list map with annot"
         (letrec [fbindsAnnot "map" ((tvar 1 \-> tvar 2) \-> tlist (tvar 1) \-> tlist (tvar 2))
             [ ([pvar "f", pcon "Cons" [pvar "x", pvar "xs"]], (var "f" \$ var "x") \: (var "map" \$ var "f" \$ var "xs"))
-            , ([pwild, pcon "Empty" []], elist [])
+            , ([pwild, plist []], elist [])
             ]]
         (var "map"))
         (scheme [1,2] $ (tvar 1 \-> tvar 2) \-> tlist (tvar 1) \-> tlist (tvar 2))

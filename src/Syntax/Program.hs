@@ -17,7 +17,6 @@ prelude = Program decls unit ()
     where
         decls =
             [ dataDecl "Bool" [] [conDecl "True" [], conDecl "False" []]
-            , dataDecl "List" [1] [conDecl "Empty" [], conDecl "Cons" [tvar 1, tcon "List" [tvar 1]]]
             , dataDecl "Maybe" [1] [conDecl "Nothing" [], conDecl "Just" [tvar 1]]
             , dataDecl "Either" [1,2] [conDecl "Left" [tvar 1], conDecl "Right" [tvar 2]]
 --            , varDecl "id" ("x" \. var "x")
@@ -29,15 +28,15 @@ prelude = Program decls unit ()
             , declGroup [fbind "map" [pvar "f", pvar "xs"]
                 (ecase (var "xs")
                     [(pcon "Cons" [pvar "x", pvar "xs"], (var "f" \$ var "x") \: (var "map" \$ var "f" \$ var "xs")),
-                     (pcon "Empty" []                  , elist [])])]
+                     (plist []                  , elist [])])]
             , declGroup [fbind "append" [pvar "xs", pvar "xs'"]
                 (ecase (var "xs")
                     [(pcon "Cons" [pvar "x", pvar "xs"], var "x" \: (var "append" \$ var "xs" \$ var "xs'")),
-                     (pcon "Empty" [], var "xs'")])]
+                     (plist [], var "xs'")])]
             , declGroup [fbind "concat" [pvar "lists"]
                 (ecase (var "lists")
                     [(pcon "Cons" [pvar "xs", pvar "lists"], var "append" \$ var "xs" \$ (var "concat" \$ var "lists")),
-                     (pcon "Empty" [], elist [])])]
+                     (plist [], elist [])])]
             ]
 
 -- | prepend the first program's decls to the second program. Ghetto importing
@@ -51,7 +50,7 @@ prog decls body = Program decls body ()
 
 -- | program with just an expression
 eProg :: Expr () -> Program ()
-eProg e = prog [] e
+eProg = prog []
 
 -- | "ghetto import" prelude
 withPrelude :: Program () -> Program ()

@@ -15,6 +15,7 @@ data MonoType = TVar TVName
               | TChar
               | TArr MonoType MonoType
               | TTup [MonoType]
+              | TList MonoType
               | TCon TCName [MonoType]
               deriving(Eq, Ord)
 instance Show MonoType where
@@ -25,7 +26,8 @@ instance Show MonoType where
                 TDouble{} -> 10
                 TChar{} -> 10
                 TArr{} -> 3
-                TTup{} -> 10
+                TTup{} -> 0
+                TList{} -> 0
                 TCon{} -> 9
         in case t of
             TVar name -> shows name
@@ -34,6 +36,7 @@ instance Show MonoType where
             TChar -> showString "Char"
             TArr arg ret -> showParen (p > p') $ showsPrec (p' + 1) arg . showString " -> " . showsPrec p' ret
             TTup tys -> showParen True $ showString (intercalate ", " (show <$> tys))
+            TList t' -> showString $ "["++show t'++"]"
             TCon name [] -> shows name
             TCon name tys -> showParen (p > p') $ shows name . showString " " . foldr1 (\ a b -> a . showString " " . b) (showsPrec (p'+1) <$> tys)
 
@@ -58,6 +61,7 @@ getMonoTypeFreeVars t = case t of
     TChar -> Set.empty
     TArr arg ret -> Set.unions (getMonoTypeFreeVars <$> [arg, ret])
     TTup tys -> Set.unions (getMonoTypeFreeVars <$> tys)
+    TList t' -> getMonoTypeFreeVars t'
     TCon _ tys -> Set.unions (getMonoTypeFreeVars <$> tys)
 
 substituteType :: TVName -> MonoType -> Type -> Type
@@ -80,6 +84,7 @@ substituteManyMonoType substitutions target = case target of
     TChar -> target
     TArr arg ret -> TArr (substituteManyMonoType substitutions arg) (substituteManyMonoType substitutions ret)
     TTup tys -> TTup (substituteManyMonoType substitutions <$> tys)
+    TList t' -> TList (substituteManyMonoType substitutions t')
     TCon conName tys -> TCon conName (substituteManyMonoType substitutions <$> tys)
 
 -- | Reduces something like t3 -> t5 to t1 -> t2
@@ -127,7 +132,7 @@ tbool :: MonoType
 tbool = tcon "Bool" []
 
 tlist :: MonoType -> MonoType
-tlist t = tcon "List" [t]
+tlist = TList
 
 tmaybe :: MonoType -> MonoType
 tmaybe t = tcon "Maybe" [t]

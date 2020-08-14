@@ -39,8 +39,13 @@ instance Show (TCState a) where
 instance Eq a => Eq (TCState a) where
     MkState _ ctx uf reasons == MkState _ ctx' uf' reasons' = (ctx, uf, reasons) == (ctx', uf', reasons')
 
+initialContext :: Context a
+initialContext =
+    emptyContext
+    |> addConAnnot (MkCName "Cons") (scheme [1] $ tvar 1 \-> tlist (tvar 1) \-> tlist (tvar 1))
+
 initialState :: TCState a
-initialState = MkState nameSource [] UF.empty []
+initialState = MkState nameSource initialContext UF.empty []
 
 type TypeChecker tag ret = StateT (TCState tag) (Either (StaticError, TCState tag)) ret
 
@@ -142,6 +147,7 @@ unify a b = localReason (Unifying a b) $ do
         (TTup tys, TTup tys')
             | length tys == length tys' -> zipWithM_ unify tys tys'
             | otherwise -> err
+        (TList t, TList t') -> unify t t'
         (TCon name tys, TCon name' tys')
             | name == name' && length tys == length tys' -> zipWithM_ unify tys tys'
             | otherwise -> err
@@ -151,6 +157,7 @@ unify a b = localReason (Unifying a b) $ do
         (TArr{}, _) -> err
         (TTup{}, _) -> err
         (TCon{}, _) -> err
+        (TList{}, _) -> err
 
 -- | unify a type variable and a type
 unifyHelp :: TVName -> MonoType -> MonoType -> MonoType -> TypeChecker a ()
@@ -271,6 +278,10 @@ infer e = localReason (Inferring e) $
             annots <- processRecBindings bindings
             localVarAnnots annots $ infer body
         Tup es _ -> TTup <$> mapM infer es
+        List es _ -> do
+            t <- freshMonoType
+            mapM_ (flip check t) es
+            return (tlist t)
         Annot e' t _ -> check e' t >> return t
         Case e' ms _ -> do
             t <- infer e'
@@ -323,6 +334,21 @@ checkPattern pattern t = do
                 unify t' t
                 tvars' <- mapM find tvars -- necessary to prevent everything from being quantified in the end
                 Map.unions <$> zipWithM checkPattern pats tvars'
+            PList pats _ -> do
+                innerType <- freshMonoType
+                let t' = tlist innerType
+                unify t' t
+                innerType' <- find innerType
+                Map.unions <$> mapM (flip checkPattern innerType') pats
+            PCon (MkCName "Cons") [first, rest] _ -> do -- TODO change to infix
+                innerType <- freshMonoType
+                let t' = tlist innerType
+                unify t' t
+                innerType' <- find innerType
+                firstAnnots <- checkPattern first innerType'
+                restAnnots <- checkPattern rest (tlist innerType')
+                return $ Map.union firstAnnots restAnnots
+            PCon (MkCName "Cons") _ _ -> error "should've been caught in wf" -- TODO wf
             PCon cName pats _ -> do
                 ctx <- getContext <$> get
                 (tName, params, types) <- case lookupConDef ctx cName of

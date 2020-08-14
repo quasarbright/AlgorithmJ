@@ -48,6 +48,7 @@ instance Show (Expr a) where
                 Let{} -> 3
                 LetRec{} -> 3
                 Tup{} -> 0
+                List{} -> 0
                 Con{} -> 10
                 Annot{} -> 1
                 Case{} -> 3
@@ -66,6 +67,7 @@ instance Show (Expr a) where
             Let binding body _ -> showParen (p > p') $ showString "let " . shows binding . showString " in " . shows body
             LetRec bindings body _ -> showParen (p > p') $ showString "let rec" . showString (intercalate " and " (show <$> bindings)) . showString " in " . shows body
             Tup es _ -> showParen True $ showString (intercalate ", " (show <$> es))
+            List es _ -> showString$  "["++intercalate ", " (show <$> es)++"]"
             Annot e' t _ -> showParen (p > p') $ showsPrec p' e' . showString " :: " . shows t
             Case e' ms _ -> showParen (p > p') $ showString "case " . shows e' . showString " of | " . showString (intercalate " | " msStrs)
                 where msStrs = [concat[show pat," -> ",show rhs] | (pat, rhs) <- ms] -- TODO prevent dangling case issue
@@ -190,8 +192,8 @@ etrue = con "True"
 efalse :: Expr ()
 efalse = con "False"
 
-elist :: Foldable t => t (Expr ()) -> Expr ()
-elist = foldr (\ a b -> con "Cons" \$ a \$ b) (con "Empty")
+elist :: [Expr ()] -> Expr ()
+elist = flip List () 
 
 infixr 5 \:
 (\:) :: Expr () -> Expr () -> Expr ()

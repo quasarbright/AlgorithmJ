@@ -2,11 +2,11 @@ module Parsing.EasyParser where
 
 import Control.Applicative hiding (some, many)
 import Control.Monad (void)
-import Data.Void
+--import Data.Void
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
-import Debug.Trace
+--import Debug.Trace
 import Syntax.Names
 
 import Parsing.ParseUtils
