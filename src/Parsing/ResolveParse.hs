@@ -21,6 +21,7 @@ import qualified Data.Map as Map
 import qualified Parsing.Graph as Graph
 --import Parsing.Graph(Graph)
 import Data.Maybe(catMaybes)
+import Data.Map (Map)
 
 {-
 converts a parsing AST to a Syntax AST
@@ -55,25 +56,22 @@ converts a parsing AST to a Syntax AST
         - requires getting free variables of a pattern
 -}
 
-operatorToOperator :: String -> SS -> Operator SS
-operatorToOperator name@(hd:_) ss
-    | hd == ':' = ConOp (MkConOpName name) ss
-    | Char.isUpper hd = ConIn (MkCName name) ss
-    | Char.isLower hd || hd == '_' = VarIn (MkVName name) ss
-    | otherwise = VarOp (MkVarOpName name) ss
-operatorToOperator _ _ = error "empty operator?"
+isNameCon :: String -> Bool
+isNameCon (hd:_) = hd == ':' || Char.isUpper hd
+isNameCon [] = error "empty name?"
+
+nameToReference :: String -> SS -> Expr SS
+nameToReference name ss = if isNameCon name then Con (MkCName name) ss else Var (MkVName name) ss
 
 exprToExpr :: P.Expr SS -> Either StaticError (Expr SS)
 exprToExpr e_ = case e_ of
-    P.Var name a
-        | Char.isLower . head $ name -> return $ Var (MkVName name) a
-        | otherwise -> return $ Con (MkCName name) a
+    P.Var name a -> return $ nameToReference name a
     P.PInt n a -> return $ ELiteral (LInt (fromInteger n) a) a
     P.PDouble d a -> return $ ELiteral (LDouble d a) a
     P.PChar c a -> return $ ELiteral (LChar c a) a
     P.PString s a -> return $ ELiteral (LString s a) a
     P.Wild a -> Left (InvalidExpr e_ a)
-    P.OpVar name a -> return $ OpRef (operatorToOperator name a) a
+    P.OpVar name a -> return $ nameToReference name a
     P.Tup es a -> do
         es' <- mapM exprToExpr es
         return (Tup es' a)
@@ -84,10 +82,11 @@ exprToExpr e_ = case e_ of
     P.App es _ -> do
         es' <- mapM exprToExpr es
         return $ foldl1 (\f x -> App f x (combineSS (getTag f) (getTag x))) es'
-    P.Binop left name fx right a -> do
+    P.Binop left name _ right a -> do
         left' <- exprToExpr left
         right' <- exprToExpr right
-        return $ BinOp left' (operatorToOperator name a) fx False right' a
+        let name' = nameToReference name a
+        return $ App (App name' left' a) right' a
     P.Annot e t a -> do
         e' <- exprToExpr e
         t' <- typeToMonotype t
@@ -129,7 +128,13 @@ exprToPattern p_ = case p_ of
             return $ PCon (MkCName name) ps a
         | otherwise -> Left $ InvalidPattern p_ a'
     P.App (P.OpVar{}:_) _ -> error "todo" -- TODO PConOp patterns
-    P.Binop{} -> error "todo" -- TODO PConBinop patterns
+    P.Binop left name _ right a -> do
+        left' <- exprToPattern left
+        right' <- exprToPattern right
+        if isNameCon name
+        then return (PCon (MkCName name) [left', right'] a)
+        else Left $ InvalidPattern p_ a
+
     P.Annot e t a -> do
         p <- exprToPattern e
         t' <- typeToMonotype t
@@ -167,6 +172,11 @@ typeToMonotype t_ = case t_ of
 
 declsToDecls :: [P.Decl SS] -> Either StaticError [Decl SS]
 declsToDecls = undefined
+
+--gatherDeclVarAnnotations :: [P.Decl SS] -> Either StaticError (Map (P.Decl SS) (String, P.Type SS, SS))
+--gatherDeclVarAnnotations decls = foldl go ([], Map.empty) decls
+--    where
+--        go (annots, )
 
 -- TODO still have to pair up annotations with decls somehow
 groupBindingDecls :: [P.Decl SS] -> [Either [P.Decl SS] (P.Decl SS)]

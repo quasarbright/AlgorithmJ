@@ -35,5 +35,3 @@ data Assoc = LAssoc | RAssoc | NonAssoc deriving(Eq, Ord, Show)
 
 -- | operator associativity and precedence
 data Fixity = MkFixity{getAssoc :: Assoc, getPrecedence :: Int} deriving(Eq, Ord, Show)
-
-data Foo = Foo Int Int

@@ -28,14 +28,6 @@ data Expr a = Var VName a
           | Case (Expr a) [(Pattern a, Expr a)] a
           -- if then else
           | If (Expr a) (Expr a) (Expr a) a
-          -- infix operation. bool is whether parenthesized
-          | BinOp (Expr a) (Operator a) Fixity Bool (Expr a) a
-          -- operator as a standalone expression like (+)
-          | OpRef (Operator a) a
-          -- partially applied operator like (1 +)
-          | LSection (Expr a) (Operator a) a
-          -- partially applied operator like (+ 1)
-          | RSection (Operator a) (Expr a) a
           deriving(Eq, Ord)
 
 instance Show (Expr a) where
@@ -53,11 +45,6 @@ instance Show (Expr a) where
                 Annot{} -> 1
                 Case{} -> 3
                 If {} -> 4
-                BinOp _ _ fx _ _ _ -> getPrecedence fx
-                OpRef{} -> 10
-                LSection{} -> 10
-                RSection{} -> 10
-                -- TODO make non-operator precedences outside of the range [1,10]
         in case e of
             Var name _ -> shows name
             Con name _ -> shows name
@@ -72,15 +59,6 @@ instance Show (Expr a) where
             Case e' ms _ -> showParen (p > p') $ showString "case " . shows e' . showString " of | " . showString (intercalate " | " msStrs)
                 where msStrs = [concat[show pat," -> ",show rhs] | (pat, rhs) <- ms] -- TODO prevent dangling case issue
             If cnd thn els _ -> showParen (p > p') $ showString "if " . showsPrec p' cnd . showString " then " . showsPrec p' thn . showString " else " . showsPrec p' els
-            BinOp l op fx isParen r _ ->
-                let (lprec, rprec) = case getAssoc fx of
-                        LAssoc -> (p', p'+1)
-                        RAssoc -> (p'+1,p')
-                        NonAssoc -> (p',p')
-                in showParen (p > p' || isParen) $ showsPrec lprec l . showString " " . shows op . showString " " . showsPrec rprec r
-            OpRef op _ -> showParen True $ shows op
-            LSection l op _ -> showParen True $ showsPrec p' l . showString " " . shows op
-            RSection op r _ -> showParen True $ shows op . showString " " . showsPrec p' r
 
 getTag :: Expr a -> a
 getTag e_ = case e_ of
@@ -89,30 +67,13 @@ getTag e_ = case e_ of
     ELiteral _ a -> a
     Tup _ a -> a
     List _ a -> a
-    OpRef _ a -> a
     Fun _ _ a -> a
     Annot _ _ a -> a
     Case _ _ a -> a
     Let _ _ a -> a
     LetRec _ _ a -> a
     App _ _ a -> a
-    LSection _ _ a -> a
-    RSection _ _ a -> a
     If _ _ _ a -> a
-    BinOp _ _ _ _ _ a -> a
-
-
-data Operator a = VarOp VarOpName a
-              | ConOp ConOpName a
-              | VarIn VName a
-              | ConIn CName a
-              deriving(Eq, Ord)
-
-instance Show (Operator a) where
-    show (VarOp name _) = show name
-    show (ConOp name _) = show name
-    show (VarIn name _) = concat["`",show name,"`"]
-    show (ConIn name _) = concat["`",show name,"`"]
 
 -- combinators for constructing expressions
 

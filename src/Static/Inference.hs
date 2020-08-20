@@ -1,4 +1,5 @@
 {-
+TODO eliminate binary operations from the AST and do desugaring instead
 TODO investigate eagerness. now use finalize instead of generalize except for cases. pretty eager.
 TODO guards
 TODO type classes (HUGE)
@@ -247,29 +248,6 @@ infer e = localReason (Inferring e) $
             retType <- freshMonoType
             unify fType (TArr xType retType)
             return retType
-        BinOp l op _ _ r _ -> do
-            opType <- inferOp op
-            lType <- infer l
-            rType <- infer r
-            retType <- freshMonoType
-            unify opType (TArr lType (TArr rType retType))
-            return retType
-        OpRef op _ -> inferOp op
-        LSection l op _ -> do
-            opType <- inferOp op
-            lType <- infer l
-            rType <- freshMonoType
-            retType <- freshMonoType
-            unify opType (TArr lType (TArr rType retType))
-            return retType
-        RSection op r _ -> do
-            -- TODO abstract all 3 cases
-            opType <- inferOp op
-            lType <- freshMonoType
-            rType <- infer r
-            retType <- freshMonoType
-            unify opType (TArr lType (TArr rType retType))
-            return retType
         Fun pats body _ -> inferFunction pats Nothing body
         Let b body _ -> do
             annots <- processBinding b
@@ -295,23 +273,6 @@ infer e = localReason (Inferring e) $
             t <- infer thn
             check els t
             return t
-
-inferOp :: Operator a -> TypeChecker a MonoType
-inferOp op = case op of
-    -- TODO abstract. literally copied from infer
-    VarIn name tag -> infer (Var name tag)
-    ConIn name tag -> infer (Con name tag)
-    VarOp name _ -> do
-        ctx <- getContext <$> get
-        case lookupVarOp ctx name of
-            Nothing -> throw (UnboundVarOp name)
-            Just t -> instantiate t
-    ConOp name _ -> do
-            ctx <- getContext <$> get
-            case lookupConOp ctx name of
-                Nothing -> throw (UnboundConOp name)
-                Just t -> instantiate t
-
 
 -- | check an expression against the given mono type
 check :: Expr a -> MonoType -> TypeChecker a ()
@@ -340,7 +301,9 @@ checkPattern pattern t = do
                 unify t' t
                 innerType' <- find innerType
                 Map.unions <$> mapM (flip checkPattern innerType') pats
-            PCon (MkCName "Cons") [first, rest] _ -> do -- TODO change to infix
+            PCon (MkCName "Cons") [first, rest] _ -> do
+                -- TODO change to infix
+                -- TODO disallow overriding cons in wf
                 innerType <- freshMonoType
                 let t' = tlist innerType
                 unify t' t
