@@ -173,10 +173,17 @@ typeToMonotype t_ = case t_ of
 declsToDecls :: [P.Decl SS] -> Either StaticError [Decl SS]
 declsToDecls = undefined
 
---gatherDeclVarAnnotations :: [P.Decl SS] -> Either StaticError (Map (P.Decl SS) (String, P.Type SS, SS))
---gatherDeclVarAnnotations decls = foldl go ([], Map.empty) decls
---    where
---        go (annots, )
+gatherDeclVarAnnotations :: [P.Decl SS] -> Map (P.Decl SS) [(String, P.Type SS)]
+gatherDeclVarAnnotations decls = snd $ foldl go ([], Map.empty) decls
+    where
+        go (annots, ans) d_ =
+            case d_ of
+                P.AnnotDecl name t _ -> ((name, t):annots, ans)
+                P.OpAnnotDecl name t _ -> ((name, t):annots, ans)
+                P.Binding{} -> (annots, Map.insert d_ annots ans)
+                P.DataDecl{} -> (annots, ans)
+                P.FixityDecl{} -> (annots, ans)
+
 
 -- TODO still have to pair up annotations with decls somehow
 groupBindingDecls :: [P.Decl SS] -> [Either [P.Decl SS] (P.Decl SS)]
